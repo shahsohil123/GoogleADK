@@ -71,7 +71,7 @@ def create_agent(repo_path: str) -> Agent:
         workspace = Path.home()
 
     return Agent(
-        model="groq/mixtral-8x7b-32768",
+        model="gemini-2.0-flash",
         name="git_commit_explainer",
         description="Analyzes git history and explains recent commits, flagging risky changes.",
         instruction=SYSTEM_INSTRUCTION,
