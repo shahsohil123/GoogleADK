@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Building a Git History Analyzer with Google ADK and LLMs</title>
+<style>
+  body { font-family: Georgia, serif; max-width: 740px; margin: 40px auto; padding: 0 20px; line-height: 1.8; color: #292929; font-size: 18px; }
+  h1 { font-size: 32px; font-weight: bold; margin-top: 40px; }
+  h2 { font-size: 24px; font-weight: bold; margin-top: 40px; }
+  h3 { font-size: 20px; font-weight: bold; margin-top: 30px; }
+  pre { background: #f5f5f5; padding: 16px; border-radius: 4px; overflow-x: auto; font-family: Menlo, monospace; font-size: 14px; line-height: 1.5; }
+  code { font-family: Menlo, monospace; font-size: 15px; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
+  blockquote { border-left: 3px solid #ccc; margin-left: 0; padding-left: 20px; color: #555; font-style: italic; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 40px 0; }
+  a { color: #1a8917; }
+  ul, ol { padding-left: 30px; }
+  li { margin-bottom: 8px; }
+  .subtitle { font-size: 20px; color: #757575; margin-top: -10px; line-height: 1.5; }
+  .image-prompt {
+    border: 2px dashed #aaa;
+    background: #fafafa;
+    padding: 20px 24px;
+    margin: 32px 0;
+    border-radius: 6px;
+    font-family: sans-serif;
+    font-size: 14px;
+    color: #555;
+  }
+  .image-prompt strong { color: #333; display: block; margin-bottom: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .image-prompt .caption { font-style: italic; color: #888; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Building a Git History Analyzer with Google ADK and LLMs &mdash; The Hard Parts Nobody Talks About</h1>
+
+<p class="subtitle"><em>How I built an AI agent that reads your git history, explains what changed in plain English, and flags risky commits &mdash; and everything that went wrong along the way.</em></p>
+
+<div class="image-prompt">
+  <strong>🖼 Hero Image — Generate with Midjourney / DALL·E / Ideogram</strong>
+  A futuristic developer workspace at night. A glowing terminal shows a git log with colorful commit hashes. An AI assistant hovers as a translucent hologram beside the screen, reading through the commits. Dark blue and teal color palette. Cinematic lighting. Tech aesthetic.
+  <p class="caption">Caption: "What if your AI could read your git history the way a senior engineer does?"</p>
+</div>
+
+<hr>
+
+<p>I recently set out to build a simple demo with <a href="https://github.com/google/adk-python">Google's Agent Development Kit (ADK)</a> &mdash; an AI agent that analyzes a git repository and produces a human-readable report of recent changes. The idea was straightforward. The execution was not.</p>
+
+<p>This post covers what I built, how the code works, and the real-world lessons I learned about model selection, API quotas, and the hidden gotchas of building agentic AI applications.</p>
+
+<p><strong>Full source code:</strong> <a href="https://github.com/shahsohil123/GoogleADK">github.com/shahsohil123/GoogleADK</a></p>
+
+<hr>
+
+<h2>What the Agent Does</h2>
+
+<div class="image-prompt">
+  <strong>🖼 Architecture Diagram — Create with Excalidraw, Whimsical, or Figma</strong>
+  Simple flow diagram showing: User → ADK Agent → BashToolPolicy check → HITL Confirmation → git commands (git log, git diff, git show) → LLM → Structured Report. Use a left-to-right flow. Clean, minimal style with rounded boxes.
+  <p class="caption">Caption: "The agent's flow — every command passes two safety checks before execution."</p>
+</div>
+
+<p>The <strong>Git Commit Explainer</strong> agent connects to any git repository and produces a structured report:</p>
+
+<ul>
+<li>Reads the last 20 commits</li>
+<li>Inspects file-level changes with <code>git diff</code> and <code>git show</code></li>
+<li>Explains what changed in plain English, grouped by feature or fix</li>
+<li>Flags commits touching sensitive areas: auth, payments, migrations, secrets</li>
+<li>Recommends what to review before the next release</li>
+</ul>
+
+<p>Here's what the output looks like:</p>
+
+<pre>
+## Summary
+- 18 commits over 6 days by 3 authors
+- Primary focus: payment service refactor and auth token refresh logic
+
+## Risk Flags
+c4d8a91 — touches auth/token_manager.py and .env.production
+This commit modifies token expiry logic AND updates production env config
+in the same change. Worth reviewing: are the new expiry values intentional?
+
+## Recommendations
+- Review c4d8a91 before release — mixed concerns in one commit
+- 4 hotfix commits in 2 days suggests instability in the payment module
+</pre>
+
+<hr>
+
+<h2>The Architecture</h2>
+
+<p>The agent is built on three components:</p>
+
+<ol>
+<li><strong>Google ADK</strong> &mdash; The agent framework</li>
+<li><strong>ExecuteBashTool</strong> &mdash; An experimental, undocumented tool in ADK v2.0.0 alpha that lets agents run shell commands</li>
+<li><strong>BashToolPolicy</strong> &mdash; A safety layer that restricts which commands the agent can execute</li>
+</ol>
+
+<p>Here's the full agent definition:</p>
+
+<pre>
+import os
+from pathlib import Path
+
+from google.adk import Agent
+from google.adk.tools.bash_tool import ExecuteBashTool, BashToolPolicy
+
+# Read-only git policy — agent can inspect but never modify
+GIT_READ_POLICY = BashToolPolicy(
+    allowed_command_prefixes=(
+        "git log",
+        "git diff",
+        "git show",
+        "git status",
+        "git branch",
+        "git shortlog",
+        "git stash list",
+    )
+)
+
+SYSTEM_INSTRUCTION = """
+You are a Git Commit Explainer. Your job is to analyze a git repository
+using bash commands and produce a clear report.
+
+You have access to a bash tool to run git commands. Use it to:
+
+1. Run: git log --oneline -20
+2. Run: git log --stat -10
+3. Run: git diff HEAD~5..HEAD --stat
+
+Then write a report with:
+
+## Summary
+- Main focus of recent work
+- Number of commits and authors
+- Time period covered
+
+## Recent Changes
+- Explanation of what changed in the last 10 commits
+
+## Risk Flags
+- Any commits touching auth, config, migrations, or secrets
+- Explain why they need careful review
+
+## Recommendations
+- What to review before next release
+- Any patterns suggesting technical debt
+
+Be direct and reference actual commit hashes and file names.
+"""
+
+
+def create_agent(repo_path: str) -> Agent:
+    workspace = Path(repo_path).expanduser().resolve()
+    if not workspace.exists() or not (workspace / ".git").exists():
+        workspace = Path.home()
+
+    return Agent(
+        model="groq/llama-3.3-70b-versatile",  # or meta-llama/llama-4-scout-17b-16e-instruct
+        name="git_commit_explainer",
+        description="Analyzes git history and explains recent commits.",
+        instruction=SYSTEM_INSTRUCTION,
+        tools=[
+            ExecuteBashTool(
+                workspace=workspace,
+                policy=GIT_READ_POLICY,
+            )
+        ],
+    )
+</pre>
+
+<p>The key design decision is the <code>BashToolPolicy</code>. It acts as a static allowlist &mdash; the agent can only run commands that start with one of the approved prefixes. Any attempt to run <code>rm</code>, <code>curl</code>, <code>git push</code>, or anything else is blocked <em>before</em> the command even reaches the confirmation step.</p>
+
+<p>On top of that, ADK's <code>ExecuteBashTool</code> has a built-in <strong>human-in-the-loop (HITL)</strong> confirmation for every command. Even if a command passes the policy check, the user still has to type "yes" to approve it. Defense in depth.</p>
+
+<hr>
+
+<h2>The Model Selection Journey (Where Things Got Interesting)</h2>
+
+<div class="image-prompt">
+  <strong>🖼 Model Comparison Table — Screenshot or designed graphic</strong>
+  A clean comparison table graphic (dark background, neon accents) showing 4 rows: Gemini 2.0 Flash (❌ Quota), Ollama Mistral 7B (❌ Hallucinated tools), Groq deprecated models (❌ Decommissioned), Groq Compound (✅ Works). Columns: Model, Provider, Result, Reason.
+  <p class="caption">Caption: "The model gauntlet — four attempts before finding one that works reliably."</p>
+</div>
+
+<p>This is where theory met reality. Here's what happened when I tried to run this agent with different model providers.</p>
+
+<h3>Attempt 1: Gemini 2.0 Flash (Google)</h3>
+
+<p>The obvious first choice &mdash; ADK is a Google product, Gemini is Google's model, and there's a free tier.</p>
+
+<pre>
+model="gemini-2.0-flash"
+</pre>
+
+<p><strong>Result:</strong> Worked perfectly... for about 10 minutes. Then:</p>
+
+<pre>
+429 RESOURCE_EXHAUSTED
+Quota exceeded for metric: generate_content_free_tier_requests
+limit: 0, model: gemini-2.0-flash
+</pre>
+
+<p>The free tier gives you 1,500 requests/day, but the quota resets and can hit zero faster than you expect during development when you're iterating rapidly. Lesson: <strong>free tiers are for demos, not for development.</strong></p>
+
+<h3>Attempt 2: Ollama (Local Models)</h3>
+
+<p>No API keys, no quotas, runs entirely on your machine. I tried Mistral 7B, Llama2 7B, and neural-chat 7B.</p>
+
+<pre>
+model="ollama/mistral"
+</pre>
+
+<p><strong>Result:</strong> The models connected fine, but every single one hallucinated tool names:</p>
+
+<pre>
+ValueError: Tool 'summary' not found.
+Available tools: execute_bash
+</pre>
+
+<p>The agent would try to call <code>summary</code>, <code>report_git_history</code>, or <code>git_commit_explainer</code> instead of the actual <code>execute_bash</code> tool. This happened consistently across all three models.</p>
+
+<p><strong>The takeaway:</strong> Small local models (7B parameters) don't reliably handle function calling in ADK's format. They understand the <em>intent</em> but can't follow the <em>protocol</em>. If you need function calling with Ollama, you'll need a larger model (70B+) or one specifically fine-tuned for tool use.</p>
+
+<h3>Attempt 3: Groq API (The Plot Twist)</h3>
+
+<p>Groq offers fast inference with a generous free tier. But I hit a different problem &mdash; <strong>model deprecation</strong>:</p>
+
+<pre>
+The model `mixtral-8x7b-32768` has been decommissioned.
+The model `llama-3.1-70b-versatile` has been decommissioned.
+The model `gemma-7b-it` has been decommissioned.
+The model `llama-3.2-90b-vision-preview` has been decommissioned.
+</pre>
+
+<p>Four models, all decommissioned. The API key was valid the entire time &mdash; the model names were simply outdated. The fix was to query the Groq API directly:</p>
+
+<pre>
+curl -s https://api.groq.com/openai/v1/models \
+  -H "Authorization: Bearer $GROQ_API_KEY" | python3 -m json.tool
+</pre>
+
+<p><strong>The takeaway:</strong> Model IDs are not stable. <strong>Always query the <code>/models</code> endpoint</strong> before hardcoding a model name.</p>
+
+<h3>The Working Configuration: groq/compound</h3>
+
+<div class="image-prompt">
+  <strong>🖼 Terminal Screenshot — Take a real screenshot of this working</strong>
+  Actual terminal output showing the agent running successfully with groq/compound: the HITL confirmation prompt appearing, the user typing "yes", and the agent outputting a git history report. Use a dark terminal theme (iTerm2 or similar). Crop tightly.
+  <p class="caption">Caption: "It works — groq/compound handles tool calling correctly and produces clean output."</p>
+</div>
+
+<pre>
+model="groq/compound"
+</pre>
+
+<p>Groq's own <code>compound</code> model is purpose-built for agentic tasks. It handles ADK's function-calling protocol correctly, doesn't hallucinate tool names, and benefits from Groq's LPU hardware for fast inference.</p>
+
+<ul>
+<li>Groq's free tier: generous daily quota</li>
+<li>Correct function calling — no hallucinated tool names</li>
+<li>Fast inference (Groq's LPU hardware)</li>
+<li>Built for agentic, multi-step reasoning</li>
+</ul>
+
+<h3>Attempt 4: functionGemma 270M (Local, No API Key Required)</h3>
+
+<p>After chasing 70B models in the cloud, I went in the opposite direction: a <strong>270M parameter model fine-tuned specifically for function calling</strong>. Google's <a href="https://huggingface.co/google/functiongemma-270m-it">functionGemma</a> was trained end-to-end to output structured tool calls rather than free-form text.</p>
+
+<p><strong>Problem 1: Gated HuggingFace repo</strong></p>
+
+<pre>
+401 GatedRepoError: Access to model google/functiongemma-270m-it is restricted.
+You must accept the license on huggingface.co to use it.
+</pre>
+
+<p>Fix: Use the community mirror <code>unsloth/functiongemma-270m-it</code>, which is ungated and publishes the same weights.</p>
+
+<p><strong>Problem 2: Non-standard output format</strong></p>
+
+<p>functionGemma doesn't output OpenAI-compatible JSON. It uses its own custom format:</p>
+
+<pre>
+&lt;start_function_call&gt;call:execute_bash{command:&lt;escape&gt;git log --oneline -5&lt;/escape&gt;}&lt;end_function_call&gt;
+</pre>
+
+<p>ADK/LiteLLM expect <code>{"tool_calls": [{"function": {"name": "...", "arguments": "..."}}]}</code>. These two formats are completely incompatible.</p>
+
+<p><strong>The solution: A format adapter server</strong></p>
+
+<p>I built a FastAPI server (<code>functiongemma_server.py</code>) that bridges the two worlds:</p>
+
+<ol>
+<li>Loads the model locally via HuggingFace <code>transformers</code></li>
+<li>Accepts standard OpenAI <code>/v1/chat/completions</code> requests</li>
+<li>Converts them to functionGemma's input format (using the <code>developer</code> role and tool schemas)</li>
+<li>Runs inference and parses the custom output back to OpenAI <code>tool_calls</code></li>
+<li>Serves on <code>http://localhost:11435</code></li>
+</ol>
+
+<p><strong>Ingesting the model</strong> (four lines):</p>
+
+<pre>
+from transformers import AutoModelForCausalLM, AutoProcessor
+
+MODEL_ID = "unsloth/functiongemma-270m-it"
+processor = AutoProcessor.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto", device_map="auto")
+</pre>
+
+<p>HuggingFace caches the download in <code>~/.cache/huggingface/hub/</code>. Subsequent runs load from cache instantly.</p>
+
+<p><strong>Parsing the custom output format:</strong></p>
+
+<pre>
+FUNC_CALL_RE = re.compile(
+    r"&lt;start_function_call&gt;call:(\w+)\{(.*?)\}&lt;end_function_call&gt;",
+    re.DOTALL,
+)
+PARAM_RE = re.compile(r"(\w+):&lt;escape&gt;(.*?)&lt;/escape&gt;")
+
+def parse_functiongemma_output(text: str):
+    match = FUNC_CALL_RE.search(text)
+    if not match:
+        return None, text.strip()
+    tool_name = match.group(1)
+    arguments = {m.group(1): m.group(2) for m in PARAM_RE.finditer(match.group(2))}
+    return tool_name, arguments
+</pre>
+
+<p><strong>Connecting to ADK:</strong></p>
+
+<pre>
+# Terminal 1: Start the adapter server
+python functiongemma_server.py
+# Serving OpenAI-compatible API at http://localhost:11435
+
+# Terminal 2: Run ADK pointing to the local server
+export OPENAI_API_BASE=http://localhost:11435/v1
+export OPENAI_API_KEY=none
+# In agent.py: model="openai/functiongemma"
+adk run .
+</pre>
+
+<p><strong>Standalone test result:</strong></p>
+
+<pre>
+Query: Show me the last 5 commits in this repository.
+
+functionGemma output:
+&lt;start_function_call&gt;call:execute_bash{command:&lt;escape&gt;last 5 commits&lt;/escape&gt;}&lt;end_function_call&gt;
+
+✅ YES — called the right tool!
+</pre>
+
+<p>The model correctly identified <code>execute_bash</code> — the exact failure mode that 7B general models couldn't overcome. The tradeoff: the <code>command</code> value is imprecise ("last 5 commits" instead of the actual bash command). The model understands <em>which</em> tool to call but needs prompt engineering to produce exact bash syntax.</p>
+
+<p><strong>The takeaway:</strong> Architecture beats parameter count for structured tasks. A 270M model fine-tuned for function calling outperforms a 7B general model at tool invocation — and it runs entirely locally with no API key, no quota, no cloud latency.</p>
+
+<hr>
+
+<h2>Setting Up: Step by Step</h2>
+
+<h3>1. Install ADK with LiteLLM Extensions</h3>
+
+<p>ADK uses Google's Gemini models by default. To use third-party models (Groq, Ollama, OpenAI, Anthropic, etc.), you need the <code>extensions</code> extra:</p>
+
+<pre>
+# Create a virtual environment
+python3.11 -m venv adk-env
+source adk-env/bin/activate
+
+# Install ADK with LiteLLM support
+pip install "google-adk[extensions]"
+</pre>
+
+<p>Without <code>[extensions]</code>, you'll get:</p>
+
+<pre>
+ValueError: Model ollama/mistral not found.
+Provider-style models require the litellm package.
+Install it with: pip install google-adk[extensions]
+</pre>
+
+<h3>2. Set Your API Key</h3>
+
+<pre>
+# For Groq (recommended)
+export GROQ_API_KEY="your-groq-api-key"
+
+# For Gemini (alternative)
+export GOOGLE_API_KEY="your-gemini-api-key"
+</pre>
+
+<p>Get a free Groq key at <a href="https://console.groq.com">console.groq.com</a>. Get a free Gemini key at <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a>.</p>
+
+<h3>3. Clone and Run</h3>
+
+<pre>
+git clone https://github.com/shahsohil123/GoogleADK.git
+cd GoogleADK/git_commit_explainer
+
+# Point to any git repo you want to analyze
+export REPO_PATH=/path/to/your/repo
+
+# Run the agent (interactive CLI)
+adk run .
+
+# Or use the web UI
+adk web .
+</pre>
+
+<h3>4. Interact with the Agent</h3>
+
+<pre>
+[user]: Analyze the git history in this directory
+[HITL confirm] Please approve or reject the bash command: git log --oneline -20
+  Type "yes" to confirm, anything else to reject.
+[user]: yes
+</pre>
+
+<hr>
+
+<h2>The Safety Model</h2>
+
+<div class="image-prompt">
+  <strong>🖼 Safety Layers Diagram — Create with Excalidraw or Figma</strong>
+  Three concentric circles or stacked shields labeled: Outer = "Workspace Scoping (filesystem boundary)", Middle = "BashToolPolicy (command allowlist)", Inner = "HITL Confirmation (human approval)". Use a security/shield visual metaphor. Green/teal color scheme.
+  <p class="caption">Caption: "Three layers of defense — the agent can't do anything you haven't explicitly approved."</p>
+</div>
+
+<p>This is worth highlighting because it's often an afterthought in agent demos. The Git Commit Explainer has <strong>three layers of safety</strong>:</p>
+
+<p><strong>Layer 1: BashToolPolicy (Static Allowlist)</strong></p>
+
+<pre>
+GIT_READ_POLICY = BashToolPolicy(
+    allowed_command_prefixes=(
+        "git log",
+        "git diff",
+        "git show",
+        "git status",
+        "git branch",
+        "git shortlog",
+        "git stash list",
+    )
+)
+</pre>
+
+<p>If the LLM tries to run <code>git push</code>, <code>rm -rf</code>, or <code>curl</code>, it's blocked immediately.</p>
+
+<p><strong>Layer 2: HITL Confirmation (Runtime Approval)</strong></p>
+
+<pre>
+# From ADK source (bash_tool.py, line 121)
+# Always request user confirmation.
+if not tool_context.tool_confirmation:
+    tool_context.request_confirmation(
+        hint=f"Please approve or reject the bash command: {command}",
+    )
+</pre>
+
+<p><strong>Layer 3: Workspace Scoping</strong></p>
+
+<p>The <code>ExecuteBashTool</code> is scoped to a specific workspace directory. The agent can't escape to the parent filesystem.</p>
+
+<hr>
+
+<h2>Key Lessons</h2>
+
+<ol>
+<li><strong>Model selection matters more than you think.</strong> The same agent code can succeed or fail depending entirely on the model's ability to handle function calling. Small 7B models hallucinate tool names. Purpose-built agentic models follow the protocol.</li>
+
+<li><strong>Model IDs are ephemeral.</strong> Groq decommissioned four models while I was building this. Always query <code>/models</code>.</li>
+
+<li><strong>Free tiers are for demos, not development.</strong> Gemini's 1,500 requests/day sounds generous until you're iterating on prompts.</li>
+
+<li><strong>ADK's ExecuteBashTool is undocumented but powerful.</strong> Not in the official docs yet, but the combination of <code>BashToolPolicy</code> + HITL is a solid safety pattern for giving agents shell access.</li>
+
+<li><strong>LiteLLM is the escape hatch.</strong> ADK's <code>[extensions]</code> extra unlocks 100+ model providers. Without it, you're locked to Gemini.</li>
+
+<li><strong>Architecture beats parameter count for structured tasks.</strong> A 270M model fine-tuned for function calling beats a 7B general model at tool invocation. If your use case is narrow and well-defined, look for task-specific fine-tunes before defaulting to the biggest model you can find.</li>
+
+<li><strong>Non-OpenAI models require an adapter layer.</strong> Not every local model speaks the OpenAI protocol. When it doesn't, a thin FastAPI server is all you need — 200 lines of Python for full LiteLLM/ADK compatibility.</li>
+</ol>
+
+<hr>
+
+<h2>What's Next</h2>
+
+<ul>
+<li>Adding <strong>sub-agents</strong> for deeper analysis (e.g., a security-focused agent that runs <code>git log --all -- '*.env'</code>)</li>
+<li>Integrating with <strong>GitHub Actions</strong> for automated PR reviews</li>
+<li>Improving functionGemma's bash command quality via <strong>few-shot prompting</strong> in the system instruction</li>
+<li>Benchmarking functionGemma vs Llama 3.3 70B on ADK tool-calling accuracy</li>
+</ul>
+
+<hr>
+
+<h2>Resources</h2>
+
+<ul>
+<li><strong>Source code:</strong> <a href="https://github.com/shahsohil123/GoogleADK">github.com/shahsohil123/GoogleADK</a></li>
+<li><strong>Google ADK:</strong> <a href="https://github.com/google/adk-python">github.com/google/adk-python</a></li>
+<li><strong>ADK Documentation:</strong> <a href="https://google.github.io/adk-docs">google.github.io/adk-docs</a></li>
+<li><strong>functionGemma on HuggingFace:</strong> <a href="https://huggingface.co/unsloth/functiongemma-270m-it">huggingface.co/unsloth/functiongemma-270m-it</a></li>
+<li><strong>Groq Console:</strong> <a href="https://console.groq.com">console.groq.com</a></li>
+<li><strong>LiteLLM Providers:</strong> <a href="https://docs.litellm.ai/docs/providers">docs.litellm.ai/docs/providers</a></li>
+</ul>
+
+<hr>
+
+<p><em>If you're building agents with ADK and running into similar issues, I'd love to hear about it. Drop a comment or open an issue on the repo.</em></p>
+
+</body>
+</html>
