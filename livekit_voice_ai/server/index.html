@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveKit Voice AI</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@latest/dist/livekit-client.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 600px;
+            padding: 40px;
+        }
+
+        h1 { font-size: 24px; margin-bottom: 8px; color: #333; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        .form-group { margin-bottom: 20px; }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus { outline: none; border-color: #667eea; }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover:not(:disabled) { background: #5568d3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .status-bar {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .status-bar.disconnected { background: #f5f5f5; color: #666; }
+        .status-bar.connecting   { background: #fff3cd; color: #856404; }
+        .status-bar.connected    { background: #d4edda; color: #155724; }
+        .status-bar.listening    { background: #cce5ff; color: #004085; }
+        .status-bar.error        { background: #f8d7da; color: #721c24; }
+
+        .mic-visualizer {
+            height: 40px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            overflow: hidden;
+            display: none;
+            margin-bottom: 16px;
+        }
+
+        .mic-visualizer.active { display: block; }
+
+        .mic-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+            height: 100%;
+            padding: 0 10px;
+        }
+
+        .bar {
+            width: 4px;
+            background: #667eea;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .participants {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .participants-title { font-weight: 600; margin-bottom: 6px; }
+
+        .chat-log {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            height: 180px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+        }
+
+        .log-entry { margin-bottom: 8px; font-size: 13px; color: #666; line-height: 1.4; }
+        .log-entry.agent { color: #764ba2; font-weight: 500; }
+
+        .button-group { display: flex; gap: 10px; }
+        .button-group button { flex: 1; font-size: 14px; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+
+        .error-msg {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .error-msg.show { display: block; }
+
+        @media (prefers-color-scheme: dark) {
+            body { background: linear-gradient(135deg, #2a2a3e, #1a1a2e); }
+            .container { background: #1e1e2e; color: #e0e0e0; }
+            h1, label { color: #e0e0e0; }
+            .subtitle { color: #999; }
+            input { background: #2a2a3e; border-color: #404050; color: #e0e0e0; }
+            input:focus { border-color: #667eea; }
+            .mic-visualizer, .participants, .chat-log { background: #2a2a3e; border-color: #404050; }
+            .log-entry { color: #999; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LiveKit Voice AI</h1>
+        <p class="subtitle">Join a room and speak — the agent listens and responds.</p>
+
+        <div class="panel active" id="joinPanel">
+            <div class="form-group">
+                <label for="room">Room Name</label>
+                <input type="text" id="room" value="voice-room">
+            </div>
+            <div class="form-group">
+                <label for="username">Your Name</label>
+                <input type="text" id="username" placeholder="e.g., Jack">
+            </div>
+            <button id="joinBtn" onclick="joinRoom()">Join Room</button>
+            <div class="error-msg" id="errorMsg"></div>
+        </div>
+
+        <div class="panel" id="sessionPanel">
+            <div class="status-bar disconnected" id="statusBar">Disconnected</div>
+
+            <div class="mic-visualizer" id="micVisualizer">
+                <div class="mic-bars" id="micBars"></div>
+            </div>
+
+            <div class="participants">
+                <div class="participants-title">Participants</div>
+                <div id="participantsList">Loading...</div>
+            </div>
+
+            <div class="chat-log" id="chatLog"></div>
+
+            <div class="button-group">
+                <button id="muteBtn" onclick="toggleMute()">Mute</button>
+                <button id="speakerBtn" onclick="toggleSpeaker()">Speaker On</button>
+                <button class="btn-danger" onclick="disconnectRoom()">Disconnect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let room = null;
+        let Room, RoomEvent, Track, ConnectionState;
+        let audioContext = null;
+        let analyser = null;
+        let animationId = null;
+        let micMuted = false;
+        let speakerMuted = false;
+        let remoteAudioElements = new Set();
+
+        async function joinRoom() {
+            const roomName = document.getElementById('room').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const errorEl = document.getElementById('errorMsg');
+
+            errorEl.classList.remove('show');
+
+            if (!roomName || !username) {
+                errorEl.textContent = 'Please enter both room name and username.';
+                errorEl.classList.add('show');
+                return;
+            }
+
+            if (!Room) {
+                errorEl.textContent = 'SDK loading — please wait a moment.';
+                errorEl.classList.add('show');
+                setTimeout(joinRoom, 500);
+                return;
+            }
+
+            try {
+                document.getElementById('joinBtn').disabled = true;
+                setStatus('connecting', 'Connecting...');
+
+                const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                const res = await fetch('/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomName, username }),
+                });
+                if (!res.ok) throw new Error(`Token request failed: ${res.statusText}`);
+
+                const { token, url } = await res.json();
+
+                room = new Room({ audio: true, video: false });
+
+                room.on(RoomEvent.Connected, () => {
+                    setStatus('listening', 'Listening...');
+                    log('Connected to room: ' + roomName);
+                    setTimeout(updateParticipants, 300);
+                });
+
+                room.on(RoomEvent.Disconnected, () => {
+                    setStatus('disconnected', 'Disconnected');
+                    cleanup();
+                });
+
+                room.on(RoomEvent.ParticipantConnected, (p) => {
+                    log(p.identity + ' joined');
+                    updateParticipants();
+                });
+
+                room.on(RoomEvent.ParticipantDisconnected, (p) => {
+                    log(p.identity + ' left');
+                    updateParticipants();
+                });
+
+                room.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+                    updateParticipants();
+                    if (track.kind === Track.Kind.Audio) {
+                        const el = track.attach();
+                        el.autoplay = true;
+                        el.style.display = 'none';
+                        el.volume = speakerMuted ? 0 : 1.0;
+                        document.body.appendChild(el);
+                        remoteAudioElements.add(el);
+                        log('Agent speaking...', 'agent');
+                    }
+                });
+
+                room.on(RoomEvent.ConnectionStateChanged, (state) => {
+                    if (state === ConnectionState.Connected) setStatus('listening', 'Listening...');
+                    else if (state === ConnectionState.Connecting) setStatus('connecting', 'Connecting...');
+                    else if (state === ConnectionState.Disconnected) setStatus('disconnected', 'Disconnected');
+                });
+
+                await room.connect(url, token);
+                await room.localParticipant.setMicrophoneEnabled(true);
+
+                setupVisualizer(mediaStream);
+
+                document.getElementById('joinPanel').classList.remove('active');
+                document.getElementById('sessionPanel').classList.add('active');
+
+            } catch (err) {
+                errorEl.textContent = err.message || 'Failed to join room.';
+                errorEl.classList.add('show');
+                document.getElementById('joinBtn').disabled = false;
+                setStatus('error', 'Connection failed');
+            }
+        }
+
+        function updateParticipants() {
+            if (!room) return;
+            let html = 'You (' + room.localParticipant.identity + ')<br>';
+            room.remoteParticipants.forEach((p) => {
+                html += p.identity + '<br>';
+            });
+            document.getElementById('participantsList').innerHTML = html;
+        }
+
+        function toggleMute() {
+            if (!room) return;
+            micMuted = !micMuted;
+            room.localParticipant.setMicrophoneEnabled(!micMuted);
+            const btn = document.getElementById('muteBtn');
+            btn.textContent = micMuted ? 'Unmute' : 'Mute';
+            btn.style.background = micMuted ? '#dc3545' : '#667eea';
+        }
+
+        function toggleSpeaker() {
+            if (!room) return;
+            speakerMuted = !speakerMuted;
+            remoteAudioElements.forEach(el => { el.volume = speakerMuted ? 0 : 1.0; });
+            const btn = document.getElementById('speakerBtn');
+            btn.textContent = speakerMuted ? 'Speaker Off' : 'Speaker On';
+            btn.style.background = speakerMuted ? '#dc3545' : '#667eea';
+        }
+
+        async function disconnectRoom() {
+            if (room) await room.disconnect();
+            cleanup();
+            remoteAudioElements.forEach(el => el.remove());
+            remoteAudioElements.clear();
+            document.getElementById('sessionPanel').classList.remove('active');
+            document.getElementById('joinPanel').classList.add('active');
+            document.getElementById('joinBtn').disabled = false;
+            document.getElementById('chatLog').innerHTML = '';
+            document.getElementById('muteBtn').textContent = 'Mute';
+            document.getElementById('muteBtn').style.background = '#667eea';
+            micMuted = false;
+            setStatus('disconnected', 'Disconnected');
+        }
+
+        function setupVisualizer(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                audioContext.createMediaStreamSource(stream).connect(analyser);
+
+                const bars = document.getElementById('micBars');
+                for (let i = 0; i < 30; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'bar';
+                    bars.appendChild(bar);
+                }
+
+                document.getElementById('micVisualizer').classList.add('active');
+                drawBars();
+            } catch (_) {}
+        }
+
+        function drawBars() {
+            if (!analyser) return;
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const bars = document.querySelectorAll('.bar');
+            const step = Math.floor(data.length / bars.length);
+            bars.forEach((bar, i) => {
+                bar.style.height = Math.max(5, (data[i * step] / 255) * 100) + '%';
+            });
+            animationId = requestAnimationFrame(drawBars);
+        }
+
+        function setStatus(type, text) {
+            const el = document.getElementById('statusBar');
+            el.className = 'status-bar ' + type;
+            el.textContent = text;
+        }
+
+        function log(text, type = '') {
+            const el = document.getElementById('chatLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry' + (type ? ' ' + type : '');
+            entry.textContent = text;
+            el.appendChild(entry);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function cleanup() {
+            if (animationId) cancelAnimationFrame(animationId);
+            if (audioContext) audioContext.close();
+            analyser = null;
+            audioContext = null;
+        }
+
+        function initSDK() {
+            const lk = window.LivekitClient;
+            if (!lk || !lk.Room) { setTimeout(initSDK, 100); return; }
+            Room = lk.Room;
+            RoomEvent = lk.RoomEvent;
+            Track = lk.Track;
+            ConnectionState = lk.ConnectionState;
+            setStatus('disconnected', 'Ready to connect');
+        }
+
+        window.addEventListener('load', initSDK);
+    </script>
+</body>
+</html>
