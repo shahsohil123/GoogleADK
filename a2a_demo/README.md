@@ -41,6 +41,16 @@
 
 ---
 
+## Demo Screenshots
+
+**Prompt Response**
+![Prompt response](./resources/Prompt%20response.png)
+
+**Call Trace for A2A**
+![Call trace for a2a](./resources/Call%20trace%20for%20a2a.png)
+
+---
+
 ## Architecture
 
 ```
