@@ -1,42 +1,43 @@
 # AI Shopping Concierge — ADK ↔ LangGraph over A2A
 
-A minimal, runnable blog-friendly demo of **two agent frameworks collaborating
-over Google's [A2A protocol](https://github.com/google-a2a/A2A)** to solve one
-of the most relatable problems on the internet: *"what should I actually buy?"*
+> A minimal, runnable demo of **two agent frameworks collaborating over
+> Google's [A2A protocol](https://github.com/google-a2a/A2A)** — an ADK
+> front-of-house agent calling a LangGraph back-end agent across
+> processes with zero shared code.
 
-- A **Personal Shopper** (Google ADK `Agent`, Gemini 2.5 Flash) talks to the
-  customer, understands their brief, and produces the final recommendation.
-  You drive it through the built-in `adk web` dev UI in your browser.
-- A **Product Researcher** (LangGraph `StateGraph`) runs behind the scenes as
-  a remote A2A service — it finds candidate products and ranks them against
-  the brief.
+![framework](https://img.shields.io/badge/frameworks-ADK%20%2B%20LangGraph-4285F4) ![protocol](https://img.shields.io/badge/protocol-A2A-34A853) ![model](https://img.shields.io/badge/model-Gemini%202.5%20Flash-FBBC04)
 
-The two agents live in different processes, are built with different
-frameworks, and never import each other. They only speak A2A: the shopper
-reads the researcher's **Agent Card** at `/.well-known/agent-card.json` and
-sends tasks over JSON-RPC.
+---
 
-> Why this matters: in a real company the "front-of-house" assistant and the
-> specialist back-end agents are often built by different teams with different
-> preferred stacks. A2A lets them collaborate without either team rewriting
-> the other's work.
+## What this demonstrates
+
+- **Multi-framework collaboration via A2A.** A Google ADK agent and a
+  LangGraph `StateGraph` run in separate processes, built with different
+  stacks, and talk only through the A2A protocol — no shared imports.
+- **Agent Card discovery.** The shopper reads the researcher's card at
+  `/.well-known/agent-card.json` to discover its name, skills, and RPC
+  endpoint. The card is the entire integration contract.
+- **Right tool for each job.** ADK `Agent` handles conversation and
+  session state; LangGraph `StateGraph` handles deterministic,
+  checkpointable multi-step research. They cooperate without either
+  team rewriting the other's work.
 
 ---
 
 ## The scenario
 
-> *"I travel a lot for work and want noise-cancelling headphones under $300
-> that are comfortable on 10-hour flights. What should I get?"*
+> *"I travel a lot for work and want noise-cancelling headphones under
+> $300 that are comfortable on 10-hour flights. What should I get?"*
 
 1. You type the brief into the ADK dev UI at `http://localhost:8000`.
-2. The Personal Shopper decides it needs product research and calls its
-   `product_researcher` tool over A2A.
-3. The LangGraph graph runs two nodes:
-   - `find_candidates` — pulls together a shortlist of products.
-   - `compare_and_rank` — weighs them against the brief and ranks them.
+2. The **Personal Shopper** (ADK) decides it needs product research
+   and calls its `product_researcher` tool over A2A.
+3. The **Product Researcher** (LangGraph) runs two nodes:
+   - `find_candidates` pulls a shortlist.
+   - `compare_and_rank` weighs them against the brief.
 4. The ranked shortlist returns over A2A.
-5. The Personal Shopper streams a warm recommendation back into the dev UI:
-   top pick, runner-up, and what to skip.
+5. The Personal Shopper streams back a warm recommendation: top pick,
+   runner-up, and what to skip.
 
 ---
 
@@ -100,65 +101,47 @@ sends tasks over JSON-RPC.
 
 ---
 
-## Project layout
-
-```
-a2a_demo/
-├── adk_shopper/                           # ADK side (the `adk web` target)
-│   └── personal_shopper/                  # one ADK agent lives here
-│       ├── __init__.py                    # re-exports .agent so adk discovers it
-│       └── agent.py                       # defines `root_agent`
-│
-├── langgraph_researcher/                  # LangGraph side (a remote A2A service)
-│   ├── __init__.py
-│   └── product_researcher.py              # StateGraph + `to_a2a()` Starlette app
-│
-├── Makefile                               # install / start-researcher / run-shopper
-├── README.md
-├── requirements.txt                       # google-adk[a2a], langgraph, uvicorn
-└── .env                                   # Google GenAI credentials
-```
-
-The directory separation is deliberate: `adk_shopper/` is an **agents
-directory** that `adk web` discovers, while `langgraph_researcher/` is a
-**service package** run by uvicorn. The two sides never import each other.
-
----
-
 ## Prerequisites
 
-- Python 3.12
-- One of:
-  - `GOOGLE_API_KEY` (AI Studio) with `GOOGLE_GENAI_USE_VERTEXAI=false`, or
+- **Python 3.12**
+- One of these auth setups (put in `.env`, loaded automatically):
+  - `GOOGLE_API_KEY` (AI Studio) with `GOOGLE_GENAI_USE_VERTEXAI=false`
   - `GOOGLE_CLOUD_PROJECT` + `GOOGLE_CLOUD_LOCATION` with
-    `GOOGLE_GENAI_USE_VERTEXAI=true` and `gcloud auth application-default login`
-
-Put these in `.env` (loaded automatically by ADK).
+    `GOOGLE_GENAI_USE_VERTEXAI=true` and
+    `gcloud auth application-default login`
 
 ---
 
-## Running the demo
+## Setup
 
 ```bash
-make install              # create .venv and install deps
+cd a2a_demo
+cp .env.example .env          # fill in your Google credentials
+make install                  # create .venv and install deps
+```
 
-# terminal 1 — start the LangGraph researcher (A2A server on :8001)
+---
+
+## Running it
+
+You need two terminals — the researcher is a separate process.
+
+### Option 1 — Default ports
+
+**Terminal 1 — LangGraph researcher (A2A server on :8001)**
+```bash
 make start-researcher
+```
 
-# terminal 2 — start the ADK dev UI (on :8000 by default)
+**Terminal 2 — ADK dev UI (on :8000)**
+```bash
 make run-shopper
 ```
 
-Then open the URL `adk web` prints (usually http://localhost:8000), select
-`personal_shopper` from the dropdown, and type the scenario prompt:
+Open the URL `adk web` prints (usually <http://localhost:8000>), select
+`personal_shopper`, and type the scenario prompt.
 
-> *"I travel a lot for work and want noise-cancelling headphones under $300
-> that are comfortable on 10-hour flights. What should I get?"*
-
-You'll watch the shopper think, call the `product_researcher` tool over A2A,
-and then stream the final recommendation.
-
-### Custom ports
+### Option 2 — Custom ports
 
 ```bash
 # terminal 1
@@ -170,9 +153,9 @@ RESEARCHER_HOST=127.0.0.1 RESEARCHER_PORT=9001 \
 RESEARCHER_URL=http://127.0.0.1:9001 .venv/bin/adk web adk_shopper --port 8888
 ```
 
-> `RESEARCHER_HOST`/`RESEARCHER_PORT` must match the uvicorn bind — those
-> values are baked into the agent card's `url` field that clients call back
-> on.
+> `RESEARCHER_HOST`/`RESEARCHER_PORT` must match the uvicorn bind —
+> those values are baked into the agent card's `url` field that
+> clients call back on.
 
 ### Peek at the agent card
 
@@ -181,43 +164,109 @@ curl http://localhost:8001/.well-known/agent-card.json | jq
 ```
 
 You'll see the researcher introduce itself: name, description, skills,
-preferred transport, RPC URL. That card is the *only* contract the shopper
-needs to integrate.
+preferred transport, RPC URL. That card is the *only* contract the
+shopper needs to integrate.
 
 ---
 
-## Key implementation notes
+## Project structure
 
-- **`to_a2a(agent, host, port)`** returns a Starlette app. It auto-builds the
-  agent card from the ADK agent's `name` + `description`, publishes it at
-  `/.well-known/agent-card.json`, and mounts JSON-RPC routes. No hand-written
-  card or routing code needed.
-- **`RemoteA2aAgent(agent_card=<card-url>)`** acts as an A2A client. Wrapping
-  it in **`AgentTool`** (rather than putting it in `sub_agents`) keeps
-  control with the shopper so it can synthesize a final, human-friendly
-  reply. `sub_agents` would hand off execution entirely.
-- **`adk web` discovery**: `adk web adk_shopper` treats `adk_shopper/` as an
-  agents directory and looks for subdirectories with a `root_agent` exposed
-  via `__init__.py` or `agent.py`. Here only `personal_shopper/` qualifies,
-  so the dropdown is clean.
-- **Checkpointer required**: `LangGraphAgent` invokes the graph with a
-  thread id per session, so the compiled graph needs `checkpointer=MemorySaver()`
-  (or another saver). Without it you get `"No checkpointer set"`.
-- **LangGraph ≥1.0 shim**: ADK still imports `CompiledGraph` from the
-  removed module `langgraph.graph.graph`. `product_researcher.py` restores
-  that import path with a tiny module shim.
+```
+a2a_demo/
+├── adk_shopper/                           # ADK side (the `adk web` target)
+│   └── personal_shopper/                  # one ADK agent lives here
+│       ├── __init__.py                    # re-exports .agent so adk discovers it
+│       └── agent.py                       # defines `root_agent`
+├── langgraph_researcher/                  # LangGraph side (a remote A2A service)
+│   ├── __init__.py
+│   └── product_researcher.py              # StateGraph + `to_a2a()` Starlette app
+├── Makefile                               # install / start-researcher / run-shopper
+├── requirements.txt                       # google-adk[a2a], langgraph, uvicorn
+├── .env.example
+└── README.md
+```
+
+The directory separation is deliberate: `adk_shopper/` is an **agents
+directory** that `adk web` discovers, while `langgraph_researcher/` is
+a **service package** run by uvicorn. The two sides never import each
+other.
 
 ---
 
-## Extending the demo
+## Key patterns
 
-- Replace the hard-coded candidates in `find_candidates_node` with a real
-  product feed — Google Shopping, Amazon PA-API, Shopify, or a vector
-  store of product reviews.
-- Add a third agent — e.g. a CrewAI *price-tracker* or a LlamaIndex
-  *reviews summarizer* — also exposed via `to_a2a()`. Drop another
+### 1. Publishing an agent as an A2A service
+
+```python
+# langgraph_researcher/product_researcher.py
+from google.adk.a2a.utils.agent_to_a2a import to_a2a
+
+app = to_a2a(root_agent, host=HOST, port=PORT)
+```
+
+`to_a2a()` returns a Starlette app. It auto-builds the agent card from
+the ADK agent's `name` + `description`, publishes it at
+`/.well-known/agent-card.json`, and mounts JSON-RPC routes. No
+hand-written card or routing code needed.
+
+### 2. Consuming a remote agent as a tool
+
+```python
+# adk_shopper/personal_shopper/agent.py
+from google.adk.agents import RemoteA2aAgent
+from google.adk.tools import AgentTool
+
+remote_researcher = RemoteA2aAgent(
+    agent_card=f"{RESEARCHER_URL}/.well-known/agent-card.json",
+)
+
+root_agent = Agent(
+    name="personal_shopper",
+    tools=[AgentTool(remote_researcher)],
+)
+```
+
+Wrapping the remote agent in **`AgentTool`** (rather than `sub_agents`)
+keeps control with the shopper so it can synthesize a final,
+human-friendly reply. `sub_agents` would hand off execution entirely.
+
+### 3. LangGraph checkpointer is required
+
+```python
+graph = workflow.compile(checkpointer=MemorySaver())
+```
+
+`LangGraphAgent` invokes the graph with a thread id per session, so
+the compiled graph needs a checkpointer. Without it you get
+`"No checkpointer set"`.
+
+---
+
+## Troubleshooting
+
+**`ImportError: cannot import CompiledGraph from langgraph.graph.graph`**
+ADK still imports `CompiledGraph` from the removed module
+`langgraph.graph.graph`. `product_researcher.py` restores that import
+path with a tiny module shim — make sure the shim runs before any
+`langgraph_agent` import.
+
+**Shopper calls the researcher but gets no response**
+Check that `RESEARCHER_URL` (shopper side) matches the uvicorn bind
+(researcher side). The card's `url` field must be reachable from the
+shopper process.
+
+---
+
+## Next steps
+
+- **Swap the hard-coded candidates** in `find_candidates_node` for a
+  real product feed — Google Shopping, Amazon PA-API, Shopify, or a
+  vector store of product reviews.
+- **Add a third agent** — a CrewAI *price-tracker* or a LlamaIndex
+  *reviews summariser* — also exposed via `to_a2a()`. Drop another
   `RemoteA2aAgent` into the shopper's tools list.
-- Deploy the researcher to Cloud Run and point `RESEARCHER_URL` at the
-  public URL. No code change on either side — the card handles discovery.
-- Add more agents under `adk_shopper/` (e.g. a `returns_concierge/`) —
-  they'll automatically appear in the `adk web` dropdown.
+- **Deploy the researcher to Cloud Run** and point `RESEARCHER_URL` at
+  the public URL. No code change on either side — the card handles
+  discovery.
+- **Add more agents under `adk_shopper/`** (e.g. a `returns_concierge/`)
+  — they'll automatically appear in the `adk web` dropdown.

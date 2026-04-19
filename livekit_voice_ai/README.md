@@ -1,12 +1,46 @@
 # LiveKit Voice AI Agent
 
-A real-time voice assistant that listens through a LiveKit room, understands speech via Deepgram STT, routes queries through a Google ADK agent (backed by Llama 4 on Groq), and responds with Deepgram TTS — all in the browser.
+> A real-time voice assistant that listens in a LiveKit room, transcribes
+> with Deepgram, routes through a **[Google ADK](https://adk.dev)** agent
+> (Llama 4 on Groq), and responds with TTS — all in the browser, with
+> support for multiple participants.
 
-Supports **multiple participants**: anyone in the room can speak and get a response. The agent switches focus to whoever is currently talking.
+![framework](https://img.shields.io/badge/framework-Google%20ADK-4285F4) ![transport](https://img.shields.io/badge/transport-LiveKit-FF4500) ![model](https://img.shields.io/badge/model-Llama%204%20on%20Groq-34A853)
 
 ---
 
-## How It Works
+## What this demonstrates
+
+- **Voice as a first-class ADK surface.** The Google ADK `Runner` is
+  wired into LiveKit's audio pipeline by overriding `llm_node`, so the
+  agent's tool-calling and session state work over a real WebRTC room
+  instead of a chat UI.
+- **Multi-participant speaker switching.** Anyone in the room can
+  speak. The worker listens to the `active_speakers_changed` event and
+  re-targets the ADK session at whoever is currently talking.
+- **Sandboxed shell tooling over voice.** A constrained `run_bash` tool
+  lets the agent read files in `resources/` (via `ls`, `cat`, `grep`,
+  etc.) while blocking anything outside the folder or on an allowlist —
+  all triggered by plain speech.
+
+---
+
+## The scenario
+
+> *"What files are in the folder?"* → *"Read the file named notes.txt"*
+> → *"Search for the word 'budget' in the spreadsheet"*
+
+1. You drop files into `resources/` and join a LiveKit room in your
+   browser.
+2. You speak. Silero VAD detects end of speech; Deepgram transcribes.
+3. The transcript goes through the ADK `Runner` — the agent reasons,
+   calls `run_bash` if it needs to look at a file, and produces a reply.
+4. Deepgram TTS synthesises the reply; LiveKit streams it back to the
+   browser speaker.
+
+---
+
+## Architecture
 
 ```
 Browser mic
@@ -22,7 +56,8 @@ Silero VAD ──► Deepgram STT ──► Google ADK Runner ──► Deepgram
                                                     (reads files in resources/)
 ```
 
-The agent can read and search files placed in the `resources/` folder. All other bash commands are blocked.
+The agent can read and search files placed in the `resources/` folder.
+All other bash commands are blocked at the tool layer.
 
 ---
 
@@ -44,9 +79,7 @@ The agent can read and search files placed in the `resources/` folder. All other
 - **Docker** — for the local LiveKit server
 - **ffmpeg** — `brew install ffmpeg`
 
-API keys required:
-
-| Service | Purpose | Free Tier |
+| Service | Purpose | Free tier |
 |---------|---------|-----------|
 | [Groq](https://console.groq.com) | LLM inference | Yes |
 | [Deepgram](https://deepgram.com) | STT + TTS | Yes — 200 hrs/month |
@@ -56,21 +89,15 @@ API keys required:
 
 ## Setup
 
-### 1. Enter the directory
-
 ```bash
 cd livekit_voice_ai
+cp .env.example .env          # fill in the keys below
+make install                  # creates .venv and installs deps
 ```
 
-### 2. Configure environment variables
+`.env` minimum:
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```
+```dotenv
 LIVEKIT_URL=ws://localhost:7880
 LIVEKIT_API_KEY=devkey
 LIVEKIT_API_SECRET=your-secret-key-must-be-at-least-32-characters-long-for-security
@@ -82,25 +109,16 @@ GROQ_API_KEY=<your key>
 GOOGLE_GENAI_USE_VERTEXAI=false
 ```
 
-> The `LIVEKIT_API_SECRET` must match what the Docker server is started with. The Makefile uses a long key — copy it from there if you're unsure.
-
-### 3. Install dependencies
-
-```bash
-make install
-```
-
-This installs everything into a `.venv` virtual environment. Activate it:
-
-```bash
-source .venv/bin/activate
-```
+> The `LIVEKIT_API_SECRET` must match what the Docker server is started
+> with. The Makefile uses a long key — copy it from there if unsure.
 
 ---
 
-## Running
+## Running it
 
-You need three terminals:
+You need three terminals.
+
+### Option 1 — Full voice stack
 
 **Terminal 1 — LiveKit server**
 ```bash
@@ -112,42 +130,28 @@ make livekit-server
 make run
 ```
 
-The worker prints `Worker registered, waiting for jobs...` when ready.
+Worker prints `Worker registered, waiting for jobs...` when ready.
 
 **Terminal 3 — Web UI**
 ```bash
 make web-ui
 ```
 
-Open [http://localhost:8001](http://localhost:8001), enter a room name and your name, and click Join.
+Open <http://localhost:8001>, enter a room name and your name, and
+click Join. Place files into `resources/` and ask about them by voice.
 
----
-
-## Using the Agent
-
-Place files in the `resources/` folder. Then ask the agent about them:
-
-- "What files are in the folder?"
-- "Read the file named notes.txt"
-- "Search for the word 'budget' in the spreadsheet"
-
-The agent uses `ls`, `cat`, `grep`, and similar read-only commands to answer. It cannot modify files or access paths outside `resources/`.
-
----
-
-## Text-Only Testing (No Microphone Needed)
-
-Test the ADK agent's reasoning in a browser chat UI:
+### Option 2 — Text-only (no microphone)
 
 ```bash
 make playground
 ```
 
-Open [http://localhost:8000](http://localhost:8000) and type queries. This validates the ADK + Groq + bash tool pipeline without any voice hardware.
+Open <http://localhost:8000> and type queries. This validates the ADK +
+Groq + bash tool pipeline without any voice hardware.
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 livekit_voice_ai/
@@ -160,22 +164,50 @@ livekit_voice_ai/
 ├── livekit_worker.py        # Bridges LiveKit audio pipeline to ADK runner
 ├── run.py                   # Entry point: python run.py dev
 ├── resources/               # Files the agent can read (created on first run)
-├── requirements.txt         # Dependency list
 ├── Makefile                 # Dev commands
-└── .env.example             # Environment variable template
+├── .env.example
+├── requirements.txt
+└── README.md
 ```
 
-### `livekit_worker.py`
+---
 
-Overrides LiveKit's `llm_node` to route transcribed speech through `Runner.run_async` (Google ADK) instead of calling an LLM directly. Uses `session.room_io.set_participant()` to switch the active speaker when the `active_speakers_changed` room event fires.
+## Key patterns
 
-### `agent/agent.py`
+### 1. Routing LiveKit audio through the ADK Runner
 
-Defines the ADK agent and the `run_bash` tool. Commands are validated against an allowlist (`ls`, `cat`, `head`, `tail`, `wc`, `file`, `stat`, `grep`, `pwd`, `echo`) and restricted to the `resources/` directory.
+`livekit_worker.py` overrides LiveKit's `llm_node` to push transcribed
+speech through `Runner.run_async` (Google ADK) instead of calling an
+LLM directly. Session state, tool calls, and events flow through ADK
+exactly as they would in a chat agent.
 
-### `server/web_ui.py`
+### 2. Multi-participant speaker switching
 
-FastAPI server that signs LiveKit JWTs and serves `index.html`. No external tools or accounts required to join a room.
+```python
+@ctx.room.on("active_speakers_changed")
+def _on_speakers_changed(speakers):
+    if speakers:
+        session.room_io.set_participant(speakers[0].identity)
+```
+
+The worker re-targets the ADK session at whoever is currently talking
+so everyone in the room gets responses — not just the first joiner.
+
+### 3. Sandboxed shell tool
+
+```python
+ALLOW = {"ls", "cat", "head", "tail", "wc", "file",
+         "stat", "grep", "pwd", "echo"}
+
+def run_bash(cmd: str) -> str:
+    binary = cmd.strip().split()[0]
+    if binary not in ALLOW:
+        return f"Command {binary} not allowed"
+    # also restricts paths to resources/ ...
+```
+
+Commands are validated against an allowlist and restricted to the
+`resources/` directory. No writes, no network calls.
 
 ---
 
@@ -187,13 +219,15 @@ FastAPI server that signs LiveKit JWTs and serves `index.html`. No external tool
 ```
 
 **Agent does not respond after transcription**
-Run `make debug` to see the full log. Check that the ADK runner is processing the transcript (look for `User:` log line in the worker output).
+Run `make debug` to see the full log. Check that the ADK runner is
+processing the transcript (look for `User:` log line in worker output).
 
 **Deepgram connection closed (net0001)**
-Normal when the room is idle — LiveKit reconnects automatically on next speech.
+Normal when the room is idle — LiveKit reconnects on next speech.
 
 **High memory usage (~900 MB)**
-Expected — LiveKit + Deepgram + Silero VAD + Python ADK runtime combined.
+Expected — LiveKit + Deepgram + Silero VAD + Python ADK runtime
+combined.
 
 **Docker: port 7880 already in use**
 ```bash
@@ -202,4 +236,21 @@ docker stop <id>
 ```
 
 **Multiple participants — only one gets responses**
-Ensure both participants have their microphones active and that VAD is detecting speech. Check the worker logs for `Speaker switch:` lines.
+Ensure both participants have their microphones active and that VAD
+is detecting speech. Check worker logs for `Speaker switch:` lines.
+
+---
+
+## Next steps
+
+- **Swap the `run_bash` tool for a real knowledge base** — point it at
+  a vector store or a document MCP server so the agent can answer
+  questions about your docs, not just a `resources/` folder.
+- **Add a wake-word** so the agent only speaks when addressed
+  (*"hey concierge…"*), useful for multi-person rooms where side
+  conversation shouldn't trigger responses.
+- **Deploy the worker to Cloud Run** and point a hosted LiveKit Cloud
+  project at it — the whole voice stack becomes a single public URL.
+- **Move the ADK agent into a subagent graph** so a router can decide
+  between a shell tool agent, a calendar agent, a search agent, etc.,
+  all reachable from the same voice interface.

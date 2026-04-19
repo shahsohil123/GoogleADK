@@ -1,0 +1,1 @@
+# Mock Booking MCP Server
