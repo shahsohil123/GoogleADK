@@ -2,7 +2,7 @@
 
 > A worked example of how a single **SKILL.md** file collapses a
 > manual-intensive regression runbook into a one-line trigger
-> ("run e2e") that Claude executes end-to-end — boots the system under test,
+> ("run e2e") that Codex executes end-to-end — boots the system under test,
 > drives the full user journey, asserts the side-effects, and writes a
 > Markdown report.
 
@@ -13,15 +13,15 @@
 ## What this demonstrates
 
 - **A real SKILL.md anatomy.** Frontmatter (`name`, `description`) that
-  Claude uses to decide *when* to fire the skill, plus a procedural body that
-  tells Claude *how* to execute it — preconditions, ordered steps, failure
+  Codex uses to decide *when* to fire the skill, plus a procedural body that
+  tells Codex *how* to execute it — preconditions, ordered steps, failure
   modes, and a strict reporting contract.
 - **A manual process worth automating.** [`manual_runbook.md`](manual_runbook.md)
   reproduces the 30-step regression QA used to run by hand: ~12 minutes,
   ~4 documented failure modes a week, plus a tendency to skip the security
   check under deadline pressure.
 - **The automation that replaces it.** [`SKILL.md`](SKILL.md) is the
-  *exact* file Claude loads — no glue code, no harness — that drives a
+  *exact* file Codex loads — no glue code, no harness — that drives a
   signup → cart → checkout → email-verification → cleanup flow against a
   local target app and emits a Markdown verdict.
 
@@ -53,11 +53,11 @@ From the repo root:
 pip install -r e2e_test_skill/target_app/requirements.txt
 ```
 
-Then, in any Claude Code session that has loaded this `SKILL.md`, simply say:
+Then, in any Codex Code session that has loaded this `SKILL.md`, simply say:
 
 > **run e2e**
 
-Claude will:
+Codex will:
 
 1. Boot `target_app/app.py` in the background.
 2. Poll `/health` until ready.
@@ -66,7 +66,7 @@ Claude will:
 5. Stop the background app.
 6. Reply with a 3-line verdict + a clickable link to the report.
 
-If you'd rather run it without Claude (to sanity-check the plumbing):
+If you'd rather run it without Codex (to sanity-check the plumbing):
 
 ```bash
 # terminal 1
@@ -95,10 +95,10 @@ python e2e_test_skill/scripts/run_e2e.py | python e2e_test_skill/scripts/write_r
 ## Why a SKILL.md and not a shell script?
 
 A shell script automates the *steps*. A SKILL.md also automates the
-*decision to run it* — the `description:` line is what lets Claude
+*decision to run it* — the `description:` line is what lets Codex
 recognize "run the smoke test before I cut a release" or "is checkout
 healthy?" as the same intent — and the *failure handling* (the "Failure
-modes to recognize" section tells Claude when to stop, when to ask, and when
+modes to recognize" section tells Codex when to stop, when to ask, and when
 to file the result as a security regression rather than a pass).
 
 The shell script is still there — it's just one of the tools the skill

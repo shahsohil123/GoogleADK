@@ -6,7 +6,7 @@ description: Run the full end-to-end checkout regression test against the local 
 # checkout-e2e
 
 A SKILL.md that replaces the 30-step manual checkout regression runbook
-([manual_runbook.md](manual_runbook.md)) with a single instruction Claude can
+([manual_runbook.md](manual_runbook.md)) with a single instruction Codex can
 follow end-to-end.
 
 ## When to use
