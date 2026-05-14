@@ -4,7 +4,7 @@
 > English, and flags risky commits — built on the undocumented
 > `ExecuteBashTool` in **[Google ADK](https://adk.dev)** v2.0.0 alpha.
 
-![framework](https://img.shields.io/badge/framework-Google%20ADK%20v2.0.0a2-4285F4) ![model](https://img.shields.io/badge/model-Gemini-34A853)
+![framework](https://img.shields.io/badge/framework-Google%20ADK%20v2.0.0a2-4285F4) ![model](https://img.shields.io/badge/model-Groq%20Llama%203.3%2070B-F55036)
 
 ---
 
@@ -42,31 +42,36 @@
                  "Explain recent changes in /path/to/repo"
                                 │
                                 ▼
-                 ┌──────────────────────────────┐
-                 │  git_commit_explainer         │
-                 │  (google.adk.Agent)           │
-                 │  model: gemini-*-flash        │
-                 └──────────────┬───────────────┘
-                                │   tools=[ ExecuteBashTool(policy=...) ]
+                 ┌──────────────────────────────────┐
+                 │  git_commit_explainer             │
+                 │  (google.adk.Agent)               │
+                 │  model: groq/llama-3.3-70b-       │
+                 │         versatile                 │
+                 └──────────────┬───────────────────┘
+                                │   tools=[ ExecuteBashTool(workspace, policy) ]
                                 ▼
-                 ┌──────────────────────────────┐
-                 │  BashToolPolicy               │
-                 │  allowlist: git log, diff,    │
-                 │  show, status, branch,        │
-                 │  shortlog, stash list         │
-                 └──────────────┬───────────────┘
+                 ┌──────────────────────────────────┐
+                 │  BashToolPolicy                   │
+                 │  allowed_command_prefixes:        │
+                 │    git log, diff, show, status,   │
+                 │    branch, shortlog, stash list   │
+                 └──────────────┬───────────────────┘
                                 │   (blocks anything else)
                                 ▼
-                 ┌──────────────────────────────┐
-                 │  human approval (dev UI)      │
-                 └──────────────┬───────────────┘
+                 ┌──────────────────────────────────┐
+                 │  human approval (dev UI)          │
+                 └──────────────┬───────────────────┘
                                 │
                                 ▼
-                     `git` process in REPO_PATH
+                  `git` process scoped to `workspace`
+                  (REPO_PATH, or $HOME if path is not
+                   a git repo — see create_agent())
 ```
 
 Every shell command takes two layers of permission to run: the policy
-allowlist (static) and the human's click in the dev UI (interactive).
+prefix-allowlist (static) and the human's click in the dev UI
+(interactive). The agent's bash tool is also pinned to a `workspace`
+directory, so commands can't escape the target repo.
 
 ---
 
@@ -117,11 +122,12 @@ Prompts the agent against the repo set by `REPO_PATH` (defaults to `.`).
 
 ```
 git_commit_explainer/
-├── agent/
-│   ├── __init__.py         # exposes root_agent for adk discovery
-│   └── agent.py            # ExecuteBashTool + BashToolPolicy allowlist
+├── __init__.py             # re-exports root_agent for adk discovery
+├── agent.py                # Agent + ExecuteBashTool + BashToolPolicy
 ├── run.py                  # CLI entry point — takes a repo path
-├── Makefile                # run / web
+├── functiongemma_server.py # optional local LLM adapter (separate experiment)
+├── Makefile                # run / web — uses .venv in this directory
+├── .venv/                  # local virtualenv (created by user)
 └── README.md
 ```
 
@@ -159,18 +165,23 @@ c4d8a91 — touches `auth/token_manager.py` and `.env.production`
 ```python
 from google.adk.tools.bash_tool import ExecuteBashTool, BashToolPolicy
 
-policy = BashToolPolicy(
-    allowed_commands=[
+GIT_READ_POLICY = BashToolPolicy(
+    allowed_command_prefixes=(
         "git log", "git diff", "git show", "git status",
         "git branch", "git shortlog", "git stash list",
-    ],
+    ),
 )
 
-bash_tool = ExecuteBashTool(policy=policy)
+bash_tool = ExecuteBashTool(
+    workspace=Path(repo_path).expanduser().resolve(),
+    policy=GIT_READ_POLICY,
+)
 ```
 
-The policy rejects anything outside the allowlist — writes, network
-calls, even `git pull` — before the human ever sees a confirmation.
+The policy rejects anything outside the prefix-allowlist — writes,
+network calls, even `git pull` — before the human ever sees a
+confirmation. Pinning `workspace` to the resolved repo path keeps
+commands from running against an arbitrary cwd.
 
 ---
 

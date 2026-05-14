@@ -71,7 +71,7 @@ def create_agent(repo_path: str) -> Agent:
         workspace = Path.home()
 
     return Agent(
-        model="groq/llama-3.3-70b-versatile",
+        model="openai/functiongemma",
         name="git_commit_explainer",
         description="Analyzes git history and explains recent commits, flagging risky changes.",
         instruction=SYSTEM_INSTRUCTION,
