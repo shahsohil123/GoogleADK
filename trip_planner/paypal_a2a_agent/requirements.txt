@@ -1,0 +1,12 @@
+a2a-sdk==0.3.26
+langgraph
+langgraph-checkpoint
+langgraph-cli[inmem]
+langchain-core
+langchain-google-genai
+langchain-google-vertexai
+langchain-mcp-adapters
+google-cloud-secret-manager
+python-dotenv
+requests
+uvicorn

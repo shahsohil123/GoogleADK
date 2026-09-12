@@ -3,12 +3,17 @@
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/paypal_a2a_agent" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel_concierge" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/trip_planner/paypal_a2a_agent" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/livekit_voice_ai/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/a2a_demo/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/git_commit_explainer/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/travel_concierge/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/e2e_test_skill/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/paypal_a2a_agent/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/trip_planner/paypal_a2a_agent/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (GoogleADK)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
