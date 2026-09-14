@@ -1,6 +1,8 @@
 google-adk[extensions]
 a2a-sdk[http-server]==0.3.26
 google-cloud-aiplatform[agent_engines]
+google-cloud-secret-manager
 google-genai
 python-dotenv
+requests==2.34.2
 uvicorn

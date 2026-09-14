@@ -21,9 +21,22 @@
   museums? avoids nightlife?) through **Vertex AI Agent Engine's Memory
   Bank** — Google's managed, semantically-searchable memory store for
   agents, scoped per user and independent of any one conversation.
-- **Asks when it doesn't know.** If Memory Bank has nothing (or only part
-  of the picture) for this user, the agent asks directly instead of
-  guessing or defaulting to generic advice — see `agent.py`'s instruction.
+- **Conversational, not a form or a guesser.** Missing preferences *and*
+  missing trip logistics (dates, origin, budget) are asked for one
+  natural round at a time and the agent waits for the reply — it never
+  fills a gap with a "reasonable default" (a currency, a date, a traveler
+  count) just to keep going. See `agent.py`'s instruction.
+- **Grounded in live data, not just a static wiki page.** Beyond
+  `load_web_page`, `travel_apis.py` wires in real APIs — live flight fares
+  (Duffel), current + forecast weather (OpenWeatherMap), rated
+  attractions/restaurants (Google Places), live currency conversion
+  (open.er-api.com), and a driving-eligibility reference lookup (side of
+  the road, minimum age, International Driving Permit requirement) used to
+  decide whether a rental car is even worth suggesting. Every one of these
+  degrades gracefully — `{"available": false, "reason": ...}` — when its
+  key isn't configured, so the agent falls back to research/its own
+  knowledge instead of failing. Hotel and rental-car *pricing* isn't
+  live-integrated (see below) — those are estimated the same way.
 - **An ADK agent exposed over A2A with one call.** `google.adk.a2a.utils.to_a2a()`
   wraps a plain ADK `Agent` as a full A2A Starlette app — no hand-rolled
   `AgentExecutor` needed (contrast with [`paypal_payments`](../paypal_payments),
@@ -67,13 +80,29 @@
 │      │                                                                   │
 │      ▼                                                                   │
 │  sights_researcher agent (Gemini + tools)                                │
-│      tools: load_web_page, recall_preferences, save_preference           │
-│      │                                          │                        │
-│      ▼                                          ▼                        │
-│  Wikipedia / Wikitravel /            Vertex AI Agent Engine Memory Bank  │
-│  Wikivoyage (research)               (SESSION/MEMORY_AGENT_ENGINE_ID)   │
+│      tools: load_web_page, recall_preferences, save_preference,         │
+│             search_places, get_weather_forecast, search_flights,        │
+│             get_exchange_rate, get_driving_requirements                 │
+│      │                    │                       │                     │
+│      ▼                    ▼                       ▼                     │
+│  Wikipedia / Wikitravel / Vertex AI Agent Engine   Live APIs             │
+│  Wikivoyage (research)    Memory Bank              (travel_apis.py):     │
+│                           (SESSION/MEMORY_          Duffel, OpenWeather,│
+│                            AGENT_ENGINE_ID)          Google Places,     │
+│                                                       open.er-api.com   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Live API keys are read from Secret Manager, not env vars.** `config.py`
+fetches `duffel-api-key`, `openweather-api-key`, and `google-places-api-key`
+from GCP Secret Manager on first use and caches them in-process — the
+matching env var (`DUFFEL_API_KEY`, etc.) is honored only as a local-dev
+override, and is never passed to the deployed container. The runtime
+identity the BYOC container actually runs as needs
+`roles/secretmanager.secretAccessor` on each secret — for a `deploy_byoc.py`
+deployment with no `service_account` override, that's the Reasoning Engine
+service agent (`service-{PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com`),
+**not** the default compute service account.
 
 `recall_preferences`/`save_preference` (`tools.py`) don't call the Memory
 Bank API directly — they go through ADK's `ToolContext.search_memory()` /
@@ -122,6 +151,24 @@ cd sights_researcher
 cp .env.example .env      # fill in GOOGLE_CLOUD_PROJECT + the two ids printed above
 make install
 ```
+
+**Optional — live-data tools** (`travel_apis.py`): each degrades gracefully
+if skipped, so none of this is required to run the agent.
+
+- **Flights** (Duffel): sign up at [app.duffel.com/join](https://app.duffel.com/join)
+  → Developers → Access tokens → New token (`duffel_test_...`, free sandbox,
+  unlimited test balance).
+- **Weather** (OpenWeatherMap): free key at [openweathermap.org/api](https://openweathermap.org/api)
+  — can take 10–15 min to activate after signup.
+- **Attractions/restaurants** (Google Places API (New)): enable it in Cloud
+  Console for your project (needs billing attached, though usage stays free
+  under 10k calls/month) and create a restricted API key.
+
+Store each as a Secret Manager secret (`duffel-api-key`,
+`openweather-api-key`, `google-places-api-key`) and grant
+`roles/secretmanager.secretAccessor` on each to the runtime identity the
+deployed container will actually use (see Architecture, above) — or just
+set the matching env var in `.env` for local-only testing.
 
 ---
 
@@ -237,6 +284,8 @@ sights_researcher/
 │   ├── card.py                 # AgentCard, with a URL that switches between localhost and the Agent Engine passthrough
 │   ├── a2a_app.py                # to_a2a() app — run locally (Option 1) or containerized for BYOC (Option 3)
 │   ├── tools.py                    # recall_preferences / save_preference, via ToolContext
+│   ├── travel_apis.py                # Live-data tools: flights, weather, places, currency, driving requirements
+│   ├── config.py                       # API keys — fetched from Secret Manager, cached in-process
 │   ├── vertex_services.py           # build_session_service / build_memory_service — the shared resources, used by runner.py
 │   └── runner.py                     # Runner wired to the shared resources, used both locally and inside the BYOC container
 ├── Dockerfile                # Builds the BYOC image (Option 3)

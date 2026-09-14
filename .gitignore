@@ -208,3 +208,9 @@ __marimo__/
 
 # ADK local state (sessions, artifacts)
 .adk/
+
+# LangGraph dev-server local runtime cache
+.langgraph_api/
+
+# macOS
+.DS_Store
