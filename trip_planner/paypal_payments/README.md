@@ -118,7 +118,7 @@ only way `list_transactions` can later say what a transaction was for.
 ## Setup
 
 ```bash
-cd trip_planner/paypal_a2a_agent
+cd trip_planner/paypal_payments
 cp .env.example .env      # fill in PayPal sandbox + Google credentials
 make install
 ```
@@ -167,25 +167,28 @@ each MCP tool call and its result.
 > instead (adds a Cloudflare tunnel), and if Studio then rejects the
 > tunnel's random domain, click **Configure connection** and allow it.
 
-### Option 3 — Vertex AI Agent Engine (managed deployment)
+### Option 3 — Vertex AI Agent Engine, BYOC (managed deployment, real A2A)
+
+Agent Engine's prebuilt `LanggraphAgent` template only exposes a
+synchronous `query()` (it calls the compiled graph's `.invoke()`), which is
+incompatible with PayPal's async-only MCP tools — and even if it weren't,
+it (like every pickle-based Agent Engine template, ADK's included) only
+exposes Agent Engine's own query/stream_query interface, not A2A; there's
+no way to attach arbitrary HTTP routes to it. **Bring Your Own Container
+(BYOC)** is Agent Engine's other deployment mode: it runs an arbitrary
+container image and forwards HTTP requests at `{engine}/api/**` to that
+container, stripping the `/api` prefix — so the exact same
+`paypal_agent/agent.py` Starlette app `make start` runs locally can be
+deployed here unchanged, reachable over real A2A JSON-RPC. There's no
+LangGraph-specific Agent Engine template at all (unlike `AdkApp` for ADK
+agents — see [`sights_researcher`](../sights_researcher)), so BYOC is the
+only way to run this agent on Agent Engine, period.
+
+One-time setup before the first deploy — a runtime service account (so the
+deployed agent can call Secret Manager and Vertex AI, not your own ADC
+identity) and a place to push the container image:
 
 ```bash
-python deploy_agent_engine.py
-```
-
-Packages the graph and deploys it as a managed Vertex AI Agent Engine
-resource — no server to run or host yourself. Agent Engine's prebuilt
-`LanggraphAgent` template only exposes a synchronous `query()` (it calls
-the compiled graph's `.invoke()`), which is incompatible with PayPal's
-async-only MCP tools, so this uses a small custom app instead —
-[`paypal_agent/agent_engine_app.py`](./paypal_agent/agent_engine_app.py) —
-exposing `async_query` per Agent Engine's custom-template protocol.
-
-One-time setup before the first deploy:
-
-```bash
-# Runtime service account the deployed agent calls Secret Manager and
-# Vertex AI as (not your own ADC identity):
 gcloud iam service-accounts create paypal-agent-engine \
   --display-name="PayPal Agent Engine runtime"
 gcloud projects add-iam-policy-binding "$GOOGLE_CLOUD_PROJECT" \
@@ -195,27 +198,41 @@ gcloud projects add-iam-policy-binding "$GOOGLE_CLOUD_PROJECT" \
   --member="serviceAccount:paypal-agent-engine@$GOOGLE_CLOUD_PROJECT.iam.gserviceaccount.com" \
   --role="roles/aiplatform.user"
 
-# GCS staging bucket Agent Engine uploads the packaged agent to:
-gcloud storage buckets create "gs://${GOOGLE_CLOUD_PROJECT}-agent-engine-staging" \
-  --location=us-central1
+# Shared with sights_researcher — skip if you've already created this:
+gcloud artifacts repositories create trip-planner-agents \
+  --repository-format=docker --location=us-central1
+PROJECT_NUMBER=$(gcloud projects describe "$GOOGLE_CLOUD_PROJECT" --format='value(projectNumber)')
+gcloud artifacts repositories add-iam-policy-binding trip-planner-agents \
+  --location=us-central1 \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.reader"
 ```
 
-Query the deployed agent once it's up:
+Then build and deploy:
 
-```python
-import asyncio
-from vertexai import agent_engines
+```bash
+make build-image   # gcloud builds submit -> trip-planner-agents/paypal-payments-a2a:v1
+make deploy        # python deploy_byoc.py -> Agent Engine, container_spec + agent_framework="custom"
+```
 
-app = agent_engines.get("projects/.../locations/.../reasoningEngines/...")  # from deploy output
+**The agent card's advertised URL matters.** `agent.py`'s `_rpc_url()`
+computes it based on whether `GOOGLE_CLOUD_AGENT_ENGINE_ID` is set (only
+true once actually running on Agent Engine): locally it's
+`http://localhost:8002/`; deployed, it's the passthrough URL below.
 
-async def main():
-    result = await app.async_query(
-        input="Book a flight from JFK to LAX for $180.",
-        config={"configurable": {"thread_id": "demo-1"}},
-    )
-    print(result)
+Call the deployed agent card and send it a message:
 
-asyncio.run(main())
+```bash
+TOKEN=$(gcloud auth print-access-token)
+ENGINE="projects/.../locations/us-central1/reasoningEngines/..."  # from deploy output
+A2A="https://us-central1-aiplatform.googleapis.com/reasoningEngines/v1/$ENGINE/api"
+
+curl -s -H "Authorization: Bearer $TOKEN" "$A2A/.well-known/agent-card.json"
+
+curl -s -X POST "$A2A/" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"message/send",
+       "params":{"message":{"messageId":"m1","role":"user",
+                 "parts":[{"kind":"text","text":"Create a $10 order for a book."}]}}}'
 ```
 
 ---
@@ -223,17 +240,17 @@ asyncio.run(main())
 ## Project structure
 
 ```
-paypal_a2a_agent/
+paypal_payments/
 ├── paypal_agent/
 │   ├── __init__.py
 │   ├── tools.py               # OAuth2 token fetch + loads PayPal's own tools from its hosted MCP server
 │   ├── graph.py               # ReAct graph — loaded directly by LangGraph Studio
 │   ├── agent_executor.py      # a2a-sdk AgentExecutor bridging A2A tasks to the graph
-│   ├── agent.py               # AgentCard + A2AStarletteApplication app
-│   └── agent_engine_app.py    # Custom async wrapper for Vertex AI Agent Engine deployment
+│   └── agent.py               # AgentCard + A2AStarletteApplication app — run locally or containerized for BYOC
 ├── langgraph.json             # LangGraph Studio / CLI manifest
-├── deploy_agent_engine.py     # Deploys to Vertex AI Agent Engine
-├── Makefile                  # install / start / studio / clean
+├── Dockerfile                 # Builds the BYOC image (Option 3)
+├── deploy_byoc.py             # Deploys that image to Vertex AI Agent Engine
+├── Makefile                   # install / start / studio / build-image / deploy / clean
 ├── requirements.txt
 ├── .env.example
 └── README.md
@@ -267,12 +284,12 @@ the graph per A2A session itself.
 
 **`FAILED_PRECONDITION: Environment variable name 'GOOGLE_CLOUD_PROJECT' is reserved`**
 Agent Engine injects `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION` itself —
-don't pass them in `env_vars` in `deploy_agent_engine.py`.
+don't pass them in `env_vars` in `deploy_byoc.py`.
 
 **`RuntimeError: asyncio.run() cannot be called from a running event loop`**
 This is why `tools.py` loads `ALL_TOOLS` through `_run_sync()` instead of a
-bare `asyncio.run()` — Agent Engine's runtime calls `set_up()` from inside
-its own event loop, which a bare `asyncio.run()` can't nest into.
+bare `asyncio.run()` — safe regardless of how this module ends up getting
+imported into a process that already has an event loop running.
 
 ---
 

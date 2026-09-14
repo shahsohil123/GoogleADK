@@ -1,15 +1,10 @@
 """LangGraph PayPal payments agent, exposed as an A2A service.
 
-A ReAct-style LangGraph agent that manages PayPal Sandbox payment tasks —
-creating orders, capturing approved payments, checking status, and issuing
-refunds — using PayPal's own hosted MCP tools (see `tools.py`). Any A2A
-client (ADK's `RemoteA2aAgent`, another LangGraph agent, or a raw A2A
-client) can drive it purely through the published agent card, with zero
-shared code.
-
-Run from the `paypal_a2a_agent/` directory:
+Run from the `paypal_payments/` directory:
     uvicorn paypal_agent.agent:app --host 0.0.0.0 --port 8002
 """
+import os
+
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
@@ -18,13 +13,21 @@ from a2a.types import AgentCapabilities, AgentCard, AgentProvider, AgentSkill
 from paypal_agent.agent_executor import PayPalAgentExecutor
 
 # Must match the uvicorn bind (see Makefile) so the published agent card's
-# `url` matches where clients actually reach the server.
+# `url` matches where clients actually reach the server, locally.
 _HOST = "localhost"
 _PORT = 8002
 
-# One skill covering the whole flow — a calling agent gets the operations,
-# ids, and preconditions it needs from this single description without a
-# per-tool entry for each of PayPal's MCP tools.
+
+def _rpc_url() -> str:
+    """Local bind address, or the Agent Engine passthrough URL once deployed."""
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    location = os.environ.get("GOOGLE_CLOUD_LOCATION")
+    engine_id = os.environ.get("GOOGLE_CLOUD_AGENT_ENGINE_ID")
+    if project and location and engine_id:
+        resource = f"projects/{project}/locations/{location}/reasoningEngines/{engine_id}"
+        return f"https://{location}-aiplatform.googleapis.com/reasoningEngines/v1/{resource}/api/"
+    return f"http://{_HOST}:{_PORT}/"
+
 skills = [
     AgentSkill(
         id="paypal_payments",
@@ -50,13 +53,9 @@ skills = [
 
 agent_card = AgentCard(
     name="paypal_payments_agent",
-    description=(
-        "PayPal Sandbox payments agent built with LangGraph — creates "
-        "orders, checks status, captures approved payments, and issues "
-        "refunds."
-    ),
-    url=f"http://{_HOST}:{_PORT}/",
-    documentation_url="https://github.com/shahsohil123/GoogleADK/tree/main/trip_planner/paypal_a2a_agent",
+    description="PayPal Sandbox payments agent built with LangGraph.",
+    url=_rpc_url(),
+    documentation_url="https://github.com/shahsohil123/GoogleADK/tree/main/trip_planner/paypal_payments",
     provider=AgentProvider(organization="trip_planner demo", url=f"http://{_HOST}:{_PORT}/"),
     version="1.0.0",
     default_input_modes=["text"],

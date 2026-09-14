@@ -1,0 +1,6 @@
+google-adk[extensions]
+a2a-sdk[http-server]==0.3.26
+google-cloud-aiplatform[agent_engines]
+google-genai
+python-dotenv
+uvicorn

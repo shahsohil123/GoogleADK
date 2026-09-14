@@ -1,17 +1,10 @@
-"""PayPal's own tools, loaded from its hosted Sandbox MCP server.
-
-PayPal publishes an MCP server at `mcp.sandbox.paypal.com` covering orders,
-refunds, invoicing, subscriptions, and more — so instead of hand-rolling
-REST wrappers, this agent binds directly to PayPal's tool implementations.
-
-Only streamable-HTTP and SSE transports are documented; streamable-HTTP
-(`/http`) 404s against the sandbox host, so this uses SSE (`/sse`), which
-works. Auth is an OAuth2 client-credentials bearer token, fetched with
-PayPal credentials stored in GCP Secret Manager (same project as Vertex AI).
+"""PayPal's own tools, loaded from its hosted Sandbox MCP server at
+`mcp.sandbox.paypal.com` (via SSE — streamable-HTTP 404s on this host).
+Auth is an OAuth2 client-credentials token, using PayPal credentials stored
+in GCP Secret Manager.
 """
 import asyncio
 import os
-from concurrent.futures import ThreadPoolExecutor
 
 from google.cloud import secretmanager
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -26,11 +19,13 @@ _MCP_URL = os.environ.get("PAYPAL_MCP_URL", "https://mcp.sandbox.paypal.com/sse"
 _TOOL_NAMES = {"create_order", "get_order", "pay_order", "create_refund", "get_refund", "list_transactions"}
 
 
+_secrets_client = secretmanager.SecretManagerServiceClient()
+
+
 def _read_secret(secret_id: str) -> str:
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
-    client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{project}/secrets/{secret_id}/versions/latest"
-    return client.access_secret_version(name=name).payload.data.decode("utf-8")
+    return _secrets_client.access_secret_version(name=name).payload.data.decode("utf-8")
 
 
 # list_transactions needs PayPal's Transaction Search scope, but PayPal only
@@ -79,8 +74,7 @@ def _require_item_descriptions(tool):
             )
         return await call(**kwargs)
 
-    tool.coroutine = validated_call
-    return tool
+    return tool.model_copy(update={"coroutine": validated_call})
 
 
 async def _load_tools():
@@ -94,22 +88,7 @@ async def _load_tools():
         }
     )
     tools = [t for t in await client.get_tools() if t.name in _TOOL_NAMES]
-    for t in tools:
-        if t.name == "create_order":
-            _require_item_descriptions(t)
-    return tools
+    return [_require_item_descriptions(t) if t.name == "create_order" else t for t in tools]
 
 
-def _run_sync(coro):
-    """Run an async one-off to completion, even if called from inside an
-    already-running event loop (e.g. Vertex AI Agent Engine's async runtime
-    calling `set_up()`) — plain `asyncio.run()` raises in that case."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with ThreadPoolExecutor(1) as pool:
-        return pool.submit(asyncio.run, coro).result()
-
-
-ALL_TOOLS = _run_sync(_load_tools())
+ALL_TOOLS = asyncio.run(_load_tools())

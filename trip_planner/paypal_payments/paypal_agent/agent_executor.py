@@ -29,7 +29,7 @@ class PayPalAgentExecutor(AgentExecutor):
 
         config = {"configurable": {"thread_id": task.context_id}}
         result = await self._graph.ainvoke({"messages": [("user", query)]}, config)
-        reply_text = result["messages"][-1].content
+        reply_text = result["messages"][-1].text
 
         await updater.update_status(
             TaskState.completed,

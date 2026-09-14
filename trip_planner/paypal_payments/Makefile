@@ -1,4 +1,4 @@
-.PHONY: install start studio studio-safari clean
+.PHONY: install start studio studio-safari build-image deploy clean
 
 install:
 	python3.12 -m venv .venv
@@ -19,6 +19,16 @@ studio:
 # random *.trycloudflare.com URL, which Studio may ask you to allow-list.
 studio-safari:
 	.venv/bin/langgraph dev --tunnel
+
+# Builds and pushes the BYOC container image (the same agent.py the local
+# A2A service runs) to the shared Artifact Registry repo.
+build-image:
+	gcloud builds submit --tag "$${GOOGLE_CLOUD_LOCATION:-us-central1}-docker.pkg.dev/$$GOOGLE_CLOUD_PROJECT/trip-planner-agents/paypal-payments-a2a:v1" .
+
+# Deploys the built image to Vertex AI Agent Engine as a real A2A service.
+# Run build-image first.
+deploy:
+	.venv/bin/python deploy_byoc.py
 
 clean:
 	rm -rf .venv
