@@ -10,6 +10,7 @@ and its own knowledge instead.
 """
 
 import asyncio
+import concurrent.futures
 
 import requests
 from google.adk.tools import FunctionTool
@@ -82,20 +83,25 @@ def _weather_forecast(city: str) -> dict:
     if not api_key:
         return {"available": False, "reason": "OpenWeatherMap API key not configured."}
 
-    current = requests.get(
-        "https://api.openweathermap.org/data/2.5/weather",
-        params={"q": city, "appid": api_key, "units": "metric"},
-        timeout=_TIMEOUT,
-    )
+    def _get(endpoint: str):
+        return requests.get(
+            f"https://api.openweathermap.org/data/2.5/{endpoint}",
+            params={"q": city, "appid": api_key, "units": "metric"},
+            timeout=_TIMEOUT,
+        )
+
+    # Independent requests — run concurrently instead of paying both
+    # latencies back-to-back.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        current_future = pool.submit(_get, "weather")
+        forecast_future = pool.submit(_get, "forecast")
+        current = current_future.result()
+        forecast = forecast_future.result()
+
     if not current.ok:
         return {"available": False, "reason": current.text[:300]}
     current_body = current.json()
 
-    forecast = requests.get(
-        "https://api.openweathermap.org/data/2.5/forecast",
-        params={"q": city, "appid": api_key, "units": "metric"},
-        timeout=_TIMEOUT,
-    )
     daily = []
     if forecast.ok:
         # One entry per ~24h (every 8th 3-hour slot) for the next few days.

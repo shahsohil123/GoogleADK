@@ -28,6 +28,12 @@ AGENT_CARD = asyncio.run(
     AgentCardBuilder(
         agent=root_agent,
         rpc_url=RPC_URL,
-        capabilities=AgentCapabilities(streaming=True),
+        # See trip_planning_agent/card.py: verified directly against the
+        # deployed Vertex AI Agent Engine REST proxy that it holds the
+        # connection open for genuine incremental SSE push, so streaming is
+        # safe here. push_notifications=True requires a real push_sender
+        # wired up server-side (see a2a_app.py) — to_a2a() doesn't provide
+        # one.
+        capabilities=AgentCapabilities(streaming=True, push_notifications=True),
     ).build()
 )

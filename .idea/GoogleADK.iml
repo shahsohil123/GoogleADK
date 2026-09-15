@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/paypal_a2a_agent" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/sights_researcher" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/paypal_payments" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/trip_planner/trip_planning" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/livekit_voice_ai/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/a2a_demo/.venv" />
@@ -20,6 +21,9 @@
       <excludeFolder url="file://$MODULE_DIR$/trip_planner/paypal_a2a_agent/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/trip_planner/paypal_payments/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/trip_planner/sights_researcher/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/a2a-inspector/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/trip_planner/a2a-inspector/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/trip_planner/trip_planning/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (GoogleADK)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -1,4 +1,12 @@
-.PHONY: install start studio studio-safari build-image deploy clean
+.PHONY: install start studio studio-safari build-image deploy delete redeploy clean
+
+# Makes .env's vars (GOOGLE_CLOUD_PROJECT, etc.) available to every recipe
+# below as both Make variables and shell environment variables — without
+# this, `$$GOOGLE_CLOUD_PROJECT` in build-image is empty unless the caller
+# happened to export it manually first, producing a malformed image tag
+# (a real failure this hit in practice, not a hypothetical).
+-include .env
+export
 
 install:
 	python3.12 -m venv .venv
@@ -29,6 +37,15 @@ build-image:
 # Run build-image first.
 deploy:
 	.venv/bin/python deploy_byoc.py
+
+# Deletes the deployed Agent Engine resource (from AGENT_ENGINE_RESOURCE_NAME
+# in .env). Irreversible.
+delete:
+	.venv/bin/python delete_byoc.py
+
+# Fresh delete + rebuild + redeploy, e.g. to clear a broken deployment
+# before a demo. Prefer `make deploy` alone for a normal update in place.
+redeploy: delete build-image deploy
 
 clean:
 	rm -rf .venv

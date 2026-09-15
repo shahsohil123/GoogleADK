@@ -12,10 +12,22 @@ Run once per kind, then copy the printed ID into each agent's .env.
 import os
 import sys
 
+import warnings
+
 import vertexai
+
+# vertexai.Client is deprecated in favor of agentplatform.Client, but the
+# replacement's runtimes.update() doesn't patch a resource in place — it
+# silently deletes and recreates it under a new resource ID (confirmed by
+# testing directly against the API), which is unacceptable for a redeploy
+# script. Suppressing this specific warning rather than "fixing" it back
+# into that unsafe path.
+warnings.filterwarnings(
+    "ignore", message="The vertexai.Client class is deprecated.*", category=FutureWarning
+)
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)  # .env on disk always wins over a stale Make-exported value
 
 KINDS = {
     "session": ("trip-planner-shared-state", "SESSION_AGENT_ENGINE_ID"),

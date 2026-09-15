@@ -2,13 +2,27 @@
 
 Run from the `paypal_payments/` directory:
     uvicorn paypal_agent.agent:app --host 0.0.0.0 --port 8002
+
+a2a-sdk 1.x rewrote the server assembly around FastAPI + protobuf-backed
+types (AgentCard, Message, Part, ...) instead of 0.3.x's
+Starlette+Pydantic stack — A2AStarletteApplication and the old
+`url`/free-form AgentCard fields are gone. See agent_executor.py for the
+matching TaskUpdater-based rewrite.
 """
 import os
 
-from a2a.server.apps import A2AStarletteApplication
+import httpx
 from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentProvider, AgentSkill
+from a2a.server.routes.agent_card_routes import create_agent_card_routes
+from a2a.server.routes.fastapi_routes import add_a2a_routes_to_fastapi
+from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
+from a2a.server.tasks import (
+    BasePushNotificationSender,
+    InMemoryPushNotificationConfigStore,
+    InMemoryTaskStore,
+)
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentProvider, AgentSkill
+from fastapi import FastAPI
 
 from paypal_agent.agent_executor import PayPalAgentExecutor
 
@@ -54,21 +68,36 @@ skills = [
 agent_card = AgentCard(
     name="paypal_payments_agent",
     description="PayPal Sandbox payments agent built with LangGraph.",
-    url=_rpc_url(),
+    supported_interfaces=[
+        AgentInterface(url=_rpc_url(), protocol_binding="JSONRPC", protocol_version="1.0")
+    ],
     documentation_url="https://github.com/shahsohil123/GoogleADK/tree/main/trip_planner/paypal_payments",
     provider=AgentProvider(organization="trip_planner demo", url=f"http://{_HOST}:{_PORT}/"),
     version="1.0.0",
     default_input_modes=["text"],
     default_output_modes=["text"],
-    capabilities=AgentCapabilities(streaming=False),
+    capabilities=AgentCapabilities(streaming=True, push_notifications=True),
     skills=skills,
 )
 
-# Agent card auto-published at /.well-known/agent-card.json.
-app = A2AStarletteApplication(
+_push_config_store = InMemoryPushNotificationConfigStore()
+_push_sender = BasePushNotificationSender(
+    httpx_client=httpx.AsyncClient(),
+    config_store=_push_config_store,
+)
+
+_handler = DefaultRequestHandler(
+    agent_executor=PayPalAgentExecutor(),
+    task_store=InMemoryTaskStore(),
+    push_config_store=_push_config_store,
+    push_sender=_push_sender,
     agent_card=agent_card,
-    http_handler=DefaultRequestHandler(
-        agent_executor=PayPalAgentExecutor(),
-        task_store=InMemoryTaskStore(),
-    ),
-).build()
+)
+
+# Agent card auto-published at /.well-known/agent-card.json; JSON-RPC at /.
+app = FastAPI()
+add_a2a_routes_to_fastapi(
+    app,
+    agent_card_routes=create_agent_card_routes(agent_card),
+    jsonrpc_routes=create_jsonrpc_routes(_handler, rpc_url="/"),
+)

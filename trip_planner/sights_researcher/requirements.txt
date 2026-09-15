@@ -1,5 +1,5 @@
 google-adk[extensions]
-a2a-sdk[http-server]==0.3.26
+a2a-sdk[http-server]==1.1.2
 google-cloud-aiplatform[agent_engines]
 google-cloud-secret-manager
 google-genai
