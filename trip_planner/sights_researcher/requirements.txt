@@ -1,4 +1,4 @@
-google-adk[extensions]
+google-adk[extensions]==2.9.0
 a2a-sdk[http-server]==1.1.2
 google-cloud-aiplatform[agent_engines]
 google-cloud-secret-manager

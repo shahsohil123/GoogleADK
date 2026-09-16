@@ -1,4 +1,4 @@
-google-adk[extensions,agent-identity,mcp]
+google-adk[extensions,agent-identity,mcp]==2.9.0
 a2a-sdk[http-server]==1.1.2
 google-cloud-aiplatform[agent_engines]
 google-auth

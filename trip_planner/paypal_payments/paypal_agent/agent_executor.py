@@ -35,7 +35,12 @@ class PayPalAgentExecutor(AgentExecutor):
 
         config = {"configurable": {"thread_id": context.context_id}}
         result = await self._graph.ainvoke({"messages": [("user", query)]}, config)
-        reply_text = result["messages"][-1].text
+        # The ReAct loop can end on a turn with no text content (the model
+        # occasionally returns an empty final message) — never hand that
+        # straight to a caller as a silent blank response.
+        reply_text = result["messages"][-1].text or (
+            "The payments agent finished the request but returned no reply text."
+        )
 
         await updater.complete(message=updater.new_agent_message([Part(text=reply_text)]))
 

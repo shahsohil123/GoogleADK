@@ -20,6 +20,7 @@ from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from sights_researcher_agent.agent import root_agent
 from sights_researcher_agent.card import AGENT_CARD, RPC_PATH
 from sights_researcher_agent.runner import create_runner
+from sights_researcher_agent.user_context import wire_user_id_header
 
 _push_config_store = InMemoryPushNotificationConfigStore()
 _push_sender = BasePushNotificationSender(
@@ -58,5 +59,6 @@ app = to_a2a(
     rpc_path=RPC_PATH,
     push_config_store=_push_config_store,
     agent_executor_factory=_agent_executor_factory,
+    lifespan=wire_user_id_header,
     port=int(os.environ.get("PORT", "8003")),
 )

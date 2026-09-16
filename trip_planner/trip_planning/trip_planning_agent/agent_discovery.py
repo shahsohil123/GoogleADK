@@ -47,6 +47,11 @@ _httpx_client = build_authed_httpx_client()
 _agent_tool_cache: dict[str, AgentTool] = {}
 
 
+def _fresh_agent_tool(agent_name: str) -> AgentTool:
+    remote_agent = _registry.get_remote_a2a_agent(agent_name=agent_name, httpx_client=_httpx_client)
+    return AgentTool(agent=remote_agent)
+
+
 def _to_match(agent: dict) -> dict:
     return {
         "agent_name": agent["name"],
@@ -124,11 +129,21 @@ async def call_agent(agent_name: str, message: str, tool_context: ToolContext) -
             Agent Registry's resource name for the target agent.
         message: What to ask or tell that agent, in plain language.
     """
-    agent_tool = _agent_tool_cache.get(agent_name)
-    if agent_tool is None:
-        remote_agent = _registry.get_remote_a2a_agent(agent_name=agent_name, httpx_client=_httpx_client)
-        agent_tool = _agent_tool_cache[agent_name] = AgentTool(agent=remote_agent)
-    return await agent_tool.run_async(args={"request": message}, tool_context=tool_context)
+    # The cached RemoteA2aAgent has last redeploy's resource URL baked in (see
+    # _agent_tool_cache above) — if that agent has since been redeployed, its
+    # resource id changed and this URL now 403s/404s even though Agent
+    # Registry already points at the new one. RemoteA2aAgent swallows that
+    # into a plain string return rather than raising, so a text match is the
+    # only failure signal available here; refresh the lookup once and retry
+    # before surfacing the failure.
+    for attempt in range(2):
+        agent_tool = _agent_tool_cache.get(agent_name)
+        if agent_tool is None or attempt == 1:
+            agent_tool = _agent_tool_cache[agent_name] = _fresh_agent_tool(agent_name)
+        response = await agent_tool.run_async(args={"request": message}, tool_context=tool_context)
+        if not response.startswith("A2A request failed"):
+            break
+    return response
 
 
 discover_agents_tool = FunctionTool(discover_agents)

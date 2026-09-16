@@ -1,4 +1,5 @@
 a2a-sdk==1.1.2
+aiologic==0.17.1
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
@@ -12,6 +13,7 @@ click==8.5.0
 cloudpickle==3.1.2
 croniter==6.2.4
 cryptography==50.0.1
+culsans==0.11.0
 distro==1.9.0
 docstring_parser==0.18.0
 fastapi==0.141.1
@@ -43,6 +45,7 @@ httpx==0.28.1
 httpx-sse==0.4.3
 httpx2==2.12.0
 idna==3.19
+json-rpc==1.15.0
 jsonpatch==1.33
 jsonpointer==3.1.1
 jsonschema==4.26.0
@@ -111,5 +114,6 @@ uvloop==0.22.1
 validators==0.35.0
 watchfiles==1.2.0
 websockets==16.1.1
+wrapt==2.4.1
 xxhash==4.0.1
 zstandard==0.25.0
