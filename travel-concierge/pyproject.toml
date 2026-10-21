@@ -1,0 +1,34 @@
+[project]
+name = "travel-concierge"
+version = "0.1.0"
+description = "Travel Concierge — Distributed Polyglot A2A Architecture (ADK + LangGraph + CrewAI)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "google-adk[agent-identity,extensions,bigquery-analytics]==2.9.0",
+    "a2a-sdk[http-server]==1.1.2",
+    "google-cloud-aiplatform[agent_engines]",
+    "google-cloud-bigquery",
+    "google-cloud-bigquery-storage",
+    "google-genai",
+    "google-auth",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "mcp",
+    "pydantic",
+    "python-dotenv",
+    "langgraph",
+    "langchain-core",
+    "langchain-google-genai",
+    "langchain-google-vertexai",
+    "crewai[google-genai]",
+    "litellm",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.uv]
+package = false

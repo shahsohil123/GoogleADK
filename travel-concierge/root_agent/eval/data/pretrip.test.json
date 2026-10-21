@@ -1,0 +1,87 @@
+{
+  "eval_set_id": "c58dc575-5e62-48f1-ab8a-ed3100e40779",
+  "name": "pretrip",
+  "description": "Flow 4: Pre-Trip Readiness & Packing (CrewAI pre_trip_agent via Agent Registry)",
+  "eval_cases": [
+    {
+      "eval_id": "pretrip_readiness_and_packing",
+      "conversation": [
+        {
+          "invocation_id": "c21d0583-7d9f-443a-9dbc-edd0d5bf6700",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Please check pre-trip updates (visa, medical, storm alerts, travel advisories, and what to pack) for my upcoming trip from San Diego to Seattle from June 15, 2025 to June 17, 2025."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Here is the important pre-trip information for your trip from San Diego to Seattle:\n\n- **Visa:** As a US citizen traveling domestically from San Diego to Seattle, you do not need a visa.\n- **Medical:** Ensure your routine vaccinations are up to date.\n- **Storm Update:** In Seattle during June, expect moderately warm weather with average highs of 69\u00b0F\u201374\u00b0F.\n- **Travel Advisory:** Check SDOT and Washington State Tourism for local transit updates.\n- **What to Pack:** Bring a light waterproof jacket, umbrella, comfortable walking shoes, and layers.\n"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "pre_trip_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/pre_trip_agent",
+                  "message": "Check visa, medical, storm alerts, travel advisories, and packing list for US Citizen traveling from San Diego to Seattle from 2025-06-15 to 2025-06-17."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747947041.1170905
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1747947041.117178
+    }
+  ],
+  "creation_timestamp": 1747947041.1171858
+}

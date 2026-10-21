@@ -1,0 +1,86 @@
+{
+  "eval_set_id": "flow_7_memory_preferences_eval_set",
+  "name": "memory_preferences",
+  "description": "Flow 7: Shared Memory Bank Save & Recall Preferences",
+  "eval_cases": [
+    {
+      "eval_id": "save_and_recall_preferences",
+      "conversation": [
+        {
+          "invocation_id": "inv-memory-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Please save my preference that I strictly eat vegan meals and prefer window seats on flights, and then recall my saved dietary and seating preferences from the Memory Bank."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "I have saved your preference for vegan meals and window seats to the shared Memory Bank and verified it via recall_preferences."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "save_preference",
+                "args": {
+                  "fact": "Traveler strictly eats vegan meals and prefers window seats on flights."
+                }
+              },
+              {
+                "name": "recall_preferences",
+                "args": {
+                  "query": "vegan dietary and window seat preferences"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1760820000.0
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1760820000.0
+    }
+  ],
+  "creation_timestamp": 1760820000.0
+}

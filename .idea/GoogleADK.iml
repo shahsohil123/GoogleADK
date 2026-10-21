@@ -9,6 +9,11 @@
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/sights_researcher" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/paypal_payments" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/trip_planner/trip_planning" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel-concierge" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel-concierge/day_of_agent" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel-concierge/in_trip_agent" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel-concierge/root_agent" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/travel-concierge/trip_monitor_agent" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/livekit_voice_ai/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/a2a_demo/.venv" />
@@ -24,6 +29,7 @@
       <excludeFolder url="file://$MODULE_DIR$/a2a-inspector/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/trip_planner/a2a-inspector/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/trip_planner/trip_planning/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/travel-concierge/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (GoogleADK)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

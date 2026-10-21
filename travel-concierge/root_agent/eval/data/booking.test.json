@@ -1,0 +1,87 @@
+{
+  "eval_set_id": "flow_3_booking_langgraph_eval_set",
+  "name": "booking",
+  "description": "Flow 3: Reservations & Payment Processing (LangGraph booking_agent via Agent Registry)",
+  "eval_cases": [
+    {
+      "eval_id": "book_reservations_and_pay_google_pay",
+      "conversation": [
+        {
+          "invocation_id": "inv-booking-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Please reserve my selected flights (LA2405/LA2408) and hotel (Palacio del Inka Cusco) and process the payment using Google Pay."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Your flight reservation (RES-FLT-90812) and hotel reservation (RES-HTL-44219) have been created and payment of $2,730.00 was approved via Google Pay (ORD-GP-774120)."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "booking_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/booking_agent",
+                  "message": "Create reservations for flights LA2405/LA2408 and hotel Palacio del Inka Cusco and process payment using Google Pay."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1760820000.0
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1760820000.0
+    }
+  ],
+  "creation_timestamp": 1760820000.0
+}

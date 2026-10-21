@@ -1,0 +1,151 @@
+{
+  "eval_set_id": "a554f356-c2b0-4b18-94cb-479d98b3192f",
+  "name": "intrip",
+  "description": "Flow 5: In-Trip Monitoring, Memorize Datetime & Day-Of Transit via Agent Registry",
+  "eval_cases": [
+    {
+      "eval_id": "intrip_monitor_memorize_and_transit",
+      "conversation": [
+        {
+          "invocation_id": "4c3147f7-8d90-425f-b3d6-85a30215766d",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "I am currently on my trip in Seattle on 2025-06-16. Please monitor my itinerary flights, Space Needle booking, and weather impacts."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "OK. I checked with the in-trip monitor agent: flights AA1234 and UA5678 are on time, and I checked venue and weather impacts for your Seattle itinerary."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "in_trip_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/in_trip_agent",
+                  "message": "Monitor active trip flights, event bookings, and weather impacts in Seattle on 2025-06-16."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946882.9600983
+        },
+        {
+          "invocation_id": "4fca44ac-214f-4481-b1bf-48c8747f936d",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "memorize the date '2025-06-16 12:45:00' and store it in the variable 'itinerary_datetime'"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "OK. I have stored the date '2025-06-16 12:45:00' in the variable 'itinerary_datetime'."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "memorize",
+                "args": {
+                  "key": "itinerary_datetime",
+                  "value": "2025-06-16 12:45:00"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946882.9601574
+        },
+        {
+          "invocation_id": "39369eef-9864-48d6-bdbb-835be1059753",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Ask in_trip_agent for day-of transport help from Ivar's Acres of Clams to the Space Needle"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Okay, you can walk from Ivar's Acres of Clams to the Space Needle in about 25-30 minutes, or take a rideshare which takes about 10 minutes."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/in_trip_agent",
+                  "message": "Provide day-of transport directions from Ivar's Acres of Clams to the Space Needle."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946882.9602013
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1747946882.9602163
+    }
+  ],
+  "creation_timestamp": 1747946882.9602237
+}

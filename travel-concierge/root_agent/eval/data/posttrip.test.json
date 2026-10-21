@@ -1,0 +1,87 @@
+{
+  "eval_set_id": "flow_6_posttrip_eval_set",
+  "name": "posttrip",
+  "description": "Flow 6: Post-Trip Feedback & Preference Extraction via Agent Registry",
+  "eval_cases": [
+    {
+      "eval_id": "posttrip_feedback_extraction",
+      "conversation": [
+        {
+          "invocation_id": "inv-posttrip-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "My trip has ended! I loved staying at boutique heritage hotels like Palacio del Inka and eating vegan Peruvian food. Please log my post-trip feedback."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Welcome back! I shared your feedback with the post-trip specialist and saved your preferences for boutique heritage hotels and vegan Peruvian cuisine to the shared Memory Bank."
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "post_trip_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/post_trip_agent",
+                  "message": "Log post-trip feedback: traveler loved boutique heritage hotels like Palacio del Inka and vegan Peruvian food."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1760820000.0
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1760820000.0
+    }
+  ],
+  "creation_timestamp": 1760820000.0
+}

@@ -1,0 +1,34 @@
+# Environment files (never commit real credentials, project IDs, or resource IDs)
+.env
+*.env
+.env.*
+**/.env.*
+**/.env
+!**/.env.example
+!.env.example
+
+# Google Cloud / Service Account credentials
+*credentials*.json
+*service-account*.json
+*service_account*.json
+gcloud/
+
+# Python virtual environments & caches
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.eval_history/
+*.egg-info/
+dist/
+build/
+
+# OS & IDE files
+.DS_Store
+.vscode/
+.idea/
+!.env.dev.example
+!**/.env.dev.example

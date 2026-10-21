@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "booking_agent": "./booking_langgraph_agent/graph.py:graph"
+  },
+  "env": ".env"
+}

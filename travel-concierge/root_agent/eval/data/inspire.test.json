@@ -1,0 +1,157 @@
+{
+  "eval_set_id": "458648cd-dbfb-4dfd-a077-6997d73b0583",
+  "name": "inspire",
+  "description": "Flow 1: Inspiration & POI Ideation + Transition to Planning via Agent Registry",
+  "eval_cases": [
+    {
+      "eval_id": "inspire_americas_peru_and_start_planning",
+      "conversation": [
+        {
+          "invocation_id": "b263f24e-66ae-4b3c-8f10-77a682fea614",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Inspire me about the Americas"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Okay, I have a few ideas for you! How about:\n\n* **Machu Picchu, Peru:** An ancient Inca citadel set high in the Andes Mountains.\n* **Banff National Park, Canada:** Home to majestic mountains and turquoise lakes.\n* **New York City, USA:** An iconic metropolis with world-class museums and diverse cuisine.\n\nAre any of these destinations of particular interest to you? I can provide more details on activities and attractions.\n"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "inspiration_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/inspiration_agent",
+                  "message": "Inspire me about the Americas"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946425.614513
+        },
+        {
+          "invocation_id": "2402df6f-dd6c-454a-a39f-b2d4cd6d52b4",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Tell me more what I can do in Peru"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Peru is a land of incredible history and natural beauty! You could:\n\n* **Explore Machu Picchu:** Hike through the iconic Inca citadel.\n* **Visit Rainbow Mountain:** Trek through vibrant, colorful landscapes.\n* **Discover Lake Titicaca:** Explore the highest navigable lake in South America.\n* **Explore Sacsayhuam\u00e1n:** Roam through this Inca fortress.\n"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/inspiration_agent",
+                  "message": "Tell me more what I can do in Peru"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946425.6145446
+        },
+        {
+          "invocation_id": "2900db8e-a91d-49c9-934c-762097a885ad",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Start planning"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Okay, let's start planning your trip to Peru! First, I need a little more information:\n* **Origin:** Where will you be departing from?\n* **Start Date:** When would you like to begin your trip?\n* **End Date:** How many days would you like your trip to last?\n"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "discover_agents",
+                "args": {
+                  "capability": "planning_agent"
+                }
+              },
+              {
+                "name": "call_agent",
+                "args": {
+                  "agent_name": "projects/your-gcp-project-id/locations/us-central1/agents/planning_agent",
+                  "message": "Start planning a trip to Peru"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 1747946425.6145635
+        }
+      ],
+      "session_input": {
+        "app_name": "root_concierge_agent",
+        "user_id": "eval_traveler",
+        "state": {
+          "user_profile": {
+            "passport_nationality": "US Citizen",
+            "seat_preference": "window",
+            "food_preference": "vegan",
+            "allergies": [],
+            "likes": [],
+            "dislikes": [],
+            "price_sensitivity": [],
+            "home": {
+              "event_type": "home",
+              "address": "6420 Sequence Dr #400, San Diego, CA 92121, United States",
+              "local_prefer_mode": "drive"
+            }
+          },
+          "itinerary": {},
+          "origin": "San Diego",
+          "destination": "Seattle",
+          "start_date": "2025-06-15",
+          "end_date": "2025-06-17",
+          "outbound_flight_selection": "",
+          "outbound_seat_number": "",
+          "return_flight_selection": "",
+          "return_seat_number": "",
+          "hotel_selection": "",
+          "room_selection": "",
+          "poi": "",
+          "itinerary_datetime": "",
+          "itinerary_start_date": "2025-06-15",
+          "itinerary_end_date": "2025-06-17"
+        }
+      },
+      "creation_timestamp": 1747946425.61458
+    }
+  ],
+  "creation_timestamp": 1747946425.614588
+}

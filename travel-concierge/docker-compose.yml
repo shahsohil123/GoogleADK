@@ -1,0 +1,273 @@
+name: travel-concierge-a2a
+
+x-common-env: &common-env
+  GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-your-gcp-project-id}
+  GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+  VERTEX_ENGINE_LOCATION: ${VERTEX_ENGINE_LOCATION:-us-central1}
+  GOOGLE_GENAI_USE_VERTEXAI: "true"
+  GENAI_MODEL: ${GENAI_MODEL:-gemini-3-flash-preview}
+  # Local Docker mode runs statelessly (InMemorySessionService & SharedInMemoryMemoryService)
+  # and only connects to GCP for the Gemini LLM model call:
+  LOCAL_MODE: ${LOCAL_MODE:-true}
+  AGENT_REGISTRY_BASE_URL: ${AGENT_REGISTRY_BASE_URL:-http://local_agent_registry:8000/v1}
+  DOCKER_NETWORK_MODE: "true"
+  OTEL_TO_CLOUD: ${OTEL_TO_CLOUD:-false}
+  BQ_ANALYTICS_ENABLED: ${BQ_ANALYTICS_ENABLED:-false}
+  GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+
+services:
+  local_agent_registry:
+    image: travel-concierge-local:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: tc-local-agent-registry
+    working_dir: /workspace
+    command: ["uvicorn", "local_agent_registry:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    environment:
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-your-gcp-project-id}
+      AGENT_REGISTRY_LOCATION: "global"
+      DOCKER_NETWORK_MODE: "true"
+    volumes:
+      - ./local_agent_registry.py:/workspace/local_agent_registry.py:ro
+
+  root_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-root-agent
+    working_dir: /workspace
+    command: ["uvicorn", "root_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports: ["8001:8001"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8001"
+      OTEL_SERVICE_NAME: root_agent
+    volumes:
+      - ./root_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  inspiration_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-inspiration-agent
+    working_dir: /workspace
+    command: ["uvicorn", "inspiration_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports: ["8002:8002"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8002"
+      OTEL_SERVICE_NAME: inspiration_agent
+    volumes:
+      - ./inspiration_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  planning_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-planning-agent
+    working_dir: /workspace
+    command: ["uvicorn", "planning_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports: ["8003:8003"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8003"
+      OTEL_SERVICE_NAME: planning_agent
+    volumes:
+      - ./planning_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  booking_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-booking-agent-langgraph
+    working_dir: /workspace
+    command: ["uvicorn", "booking_langgraph_agent.agent:app", "--host", "0.0.0.0", "--port", "8004"]
+    ports: ["8004:8004"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8004"
+      OTEL_SERVICE_NAME: booking_agent
+    volumes:
+      - ./booking_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  pre_trip_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-pre-trip-agent-crewai
+    working_dir: /workspace
+    command: ["uvicorn", "pre_trip_crewai_agent.agent:app", "--host", "0.0.0.0", "--port", "8005"]
+    ports: ["8005:8005"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8005"
+      OTEL_SERVICE_NAME: pre_trip_agent
+    volumes:
+      - ./pre_trip_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  in_trip_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-in-trip-agent
+    working_dir: /workspace
+    command: ["uvicorn", "in_trip_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8006"]
+    ports: ["8006:8006"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8006"
+      OTEL_SERVICE_NAME: in_trip_agent
+    volumes:
+      - ./in_trip_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  post_trip_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-post-trip-agent
+    working_dir: /workspace
+    command: ["uvicorn", "post_trip_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8007"]
+    ports: ["8007:8007"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8007"
+      OTEL_SERVICE_NAME: post_trip_agent
+    volumes:
+      - ./post_trip_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  place_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-place-agent
+    working_dir: /workspace
+    command: ["uvicorn", "place_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8008"]
+    ports: ["8008:8008"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8008"
+      OTEL_SERVICE_NAME: place_agent
+    volumes:
+      - ./place_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  poi_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-poi-agent
+    working_dir: /workspace
+    command: ["uvicorn", "poi_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8009"]
+    ports: ["8009:8009"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8009"
+      OTEL_SERVICE_NAME: poi_agent
+    volumes:
+      - ./poi_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  flight_search_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-flight-search-agent
+    working_dir: /workspace
+    command: ["uvicorn", "flight_search_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8010"]
+    ports: ["8010:8010"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8010"
+      OTEL_SERVICE_NAME: flight_search_agent
+    volumes:
+      - ./flight_search_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  flight_seat_selection_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-flight-seat-selection-agent
+    working_dir: /workspace
+    command: ["uvicorn", "flight_seat_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8011"]
+    ports: ["8011:8011"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8011"
+      OTEL_SERVICE_NAME: flight_seat_selection_agent
+    volumes:
+      - ./flight_seat_selection_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  hotel_search_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-hotel-search-agent
+    working_dir: /workspace
+    command: ["uvicorn", "hotel_search_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8012"]
+    ports: ["8012:8012"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8012"
+      OTEL_SERVICE_NAME: hotel_search_agent
+    volumes:
+      - ./hotel_search_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  hotel_room_selection_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-hotel-room-selection-agent
+    working_dir: /workspace
+    command: ["uvicorn", "hotel_room_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8013"]
+    ports: ["8013:8013"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8013"
+      OTEL_SERVICE_NAME: hotel_room_selection_agent
+    volumes:
+      - ./hotel_room_selection_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  itinerary_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-itinerary-agent
+    working_dir: /workspace
+    command: ["uvicorn", "itinerary_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8014"]
+    ports: ["8014:8014"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8014"
+      OTEL_SERVICE_NAME: itinerary_agent
+    volumes:
+      - ./itinerary_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  day_of_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-day-of-agent
+    working_dir: /workspace
+    command: ["uvicorn", "day_of_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8015"]
+    ports: ["8015:8015"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8015"
+      OTEL_SERVICE_NAME: day_of_agent
+    volumes:
+      - ./day_of_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  trip_monitor_agent:
+    image: travel-concierge-local:latest
+    container_name: tc-trip-monitor-agent
+    working_dir: /workspace
+    command: ["uvicorn", "trip_monitor_concierge_agent.a2a_app:app", "--host", "0.0.0.0", "--port", "8016"]
+    ports: ["8016:8016"]
+    depends_on: [local_agent_registry]
+    environment:
+      <<: *common-env
+      PORT: "8016"
+      OTEL_SERVICE_NAME: trip_monitor_agent
+    volumes:
+      - ./trip_monitor_agent:/workspace:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
