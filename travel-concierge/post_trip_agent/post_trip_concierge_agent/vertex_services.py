@@ -23,6 +23,8 @@ import logging
 import os
 
 os.environ.setdefault("GRPC_DNS_RESOLVER", "native")
+os.environ.setdefault("OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
+os.environ.setdefault("OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -158,7 +160,7 @@ def setup_cloud_trace_telemetry(service_name: str = AGENT_SERVICE_NAME) -> bool:
             google_auth=(credentials, effective_project),
         )
         from opentelemetry.sdk.resources import Resource as _OtelResource
-        from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
+        from opentelemetry.sdk.trace import SpanLimits as _SpanLimits, TracerProvider as _SdkTracerProvider
 
         otel_resource = get_gcp_resource(effective_project).merge(
             _OtelResource(attributes={"service.name": service_name})
@@ -166,8 +168,9 @@ def setup_cloud_trace_telemetry(service_name: str = AGENT_SERVICE_NAME) -> bool:
         current_provider = trace.get_tracer_provider()
         if isinstance(current_provider, _SdkTracerProvider):
             try:
-                current_provider._resource = current_provider._resource.merge(
-                    _OtelResource(attributes={"service.name": service_name})
+                current_provider._resource = current_provider._resource.merge(otel_resource)
+                current_provider._span_limits = _SpanLimits(
+                    max_attribute_length=16000, max_span_attribute_length=16000
                 )
             except Exception:
                 pass

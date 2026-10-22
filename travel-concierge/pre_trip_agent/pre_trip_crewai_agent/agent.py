@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from pre_trip_crewai_agent.vertex_services import (
+    current_traceparent,
+    extract_otel_context_from_traceparent,
+)
+
 import httpx
 from a2a.auth.user import User
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -32,10 +37,6 @@ from opentelemetry import context as otel_context
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from pre_trip_crewai_agent.agent_executor import PreTripAgentExecutor
-from pre_trip_crewai_agent.vertex_services import (
-    current_traceparent,
-    extract_otel_context_from_traceparent,
-)
 
 _HOST = "localhost"
 _PORT = int(os.environ.get("PORT", "8005"))

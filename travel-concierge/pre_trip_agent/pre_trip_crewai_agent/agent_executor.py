@@ -14,7 +14,6 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import Part, Task, TaskState, TaskStatus
 from opentelemetry import context as otel_context, trace
 
-from pre_trip_crewai_agent.crew import build_pre_trip_crew
 from pre_trip_crewai_agent.vertex_services import (
     append_vertex_session_turn,
     current_traceparent,
@@ -24,6 +23,7 @@ from pre_trip_crewai_agent.vertex_services import (
     log_crewai_run_to_bigquery,
     search_memory_facts_sync,
 )
+from pre_trip_crewai_agent.crew import build_pre_trip_crew
 
 _tracer = trace.get_tracer("travel_concierge.pre_trip_agent")
 

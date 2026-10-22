@@ -16,6 +16,8 @@ import uuid
 import warnings
 
 os.environ.setdefault("GRPC_DNS_RESOLVER", "native")
+os.environ.setdefault("OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
+os.environ.setdefault("OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
 os.environ.setdefault("CREWAI_TRACING_ENABLED", "true")
 
 from dotenv import find_dotenv, load_dotenv
@@ -166,16 +168,27 @@ def setup_cloud_trace_telemetry(service_name: str = "pre_trip_agent") -> bool:
         credentials, default_proj = google.auth.default()
         eff_proj = project_id or default_proj
         hooks = get_gcp_exporters(enable_cloud_tracing=True, google_auth=(credentials, eff_proj))
-        from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
+        from opentelemetry.sdk.resources import Resource as _OtelResource
+        from opentelemetry.sdk.trace import SpanLimits as _SpanLimits, TracerProvider as _SdkTracerProvider
 
+        otel_resource = get_gcp_resource(eff_proj).merge(
+            _OtelResource(attributes={"service.name": service_name})
+        )
         current_provider = trace.get_tracer_provider()
         if isinstance(current_provider, _SdkTracerProvider):
+            try:
+                current_provider._resource = current_provider._resource.merge(otel_resource)
+                current_provider._span_limits = _SpanLimits(
+                    max_attribute_length=16000, max_span_attribute_length=16000
+                )
+            except Exception:
+                pass
             for sp in hooks.span_processors:
                 current_provider.add_span_processor(sp)
         else:
             maybe_set_otel_providers(
                 otel_hooks_to_setup=[hooks],
-                otel_resource=get_gcp_resource(eff_proj),
+                otel_resource=otel_resource,
             )
         _wire_crewai_telemetry_to_otel_provider()
         atexit.register(
