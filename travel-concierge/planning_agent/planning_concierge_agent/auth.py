@@ -1,16 +1,18 @@
 """HTTPX client for calling other A2A agents.
 
-- **Local / Docker Mode (`LOCAL_MODE=true`)**: Statelessly forwards only the
-  active traveler's `X-User-Id` header — makes zero Google Cloud Auth calls.
-- **Cloud Mode (`LOCAL_MODE=false`)**: Attaches both the Google Cloud OAuth
-  bearer token and `X-User-Id` header for Vertex AI Agent Engine endpoints.
+- **Local / Docker Mode (`LOCAL_MODE=true`)**: Statelessly forwards the active
+  traveler's `X-User-Id` and OpenTelemetry W3C `traceparent` / `X-Traceparent`
+  headers — makes zero Google Cloud Auth calls.
+- **Cloud Mode (`LOCAL_MODE=false`)**: Eagerly initializes Google Cloud OAuth
+  credentials at import time and attaches `Authorization`, `X-User-Id`,
+  `traceparent`, and `X-Traceparent` headers for Vertex AI Agent Engine endpoints.
 """
 
 from contextvars import ContextVar
 import os
 
 import httpx
-from planning_concierge_agent.vertex_services import is_local_mode
+from planning_concierge_agent.vertex_services import format_current_traceparent, is_local_mode
 
 _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 current_user_id: ContextVar[str] = ContextVar("current_user_id", default="default_traveler")
@@ -20,6 +22,13 @@ class _HybridA2AAuth(httpx.Auth):
     def __init__(self):
         self._creds = None
         self._request = None
+        if not is_local_mode():
+            try:
+                self._ensure_gcp_creds()
+                if self._creds is not None and not self._creds.valid:
+                    self._creds.refresh(self._request)
+            except Exception:
+                pass
 
     def _ensure_gcp_creds(self):
         if self._creds is None:
@@ -38,6 +47,10 @@ class _HybridA2AAuth(httpx.Auth):
             ).replace("/locations/global/reasoningEngines/", f"/locations/{eng_loc}/reasoningEngines/")
             request.url = httpx.URL(fixed_url)
         request.headers["X-User-Id"] = current_user_id.get()
+        tp = format_current_traceparent()
+        if tp:
+            request.headers["traceparent"] = tp
+            request.headers["X-Traceparent"] = tp
         # Only attach Google Cloud OAuth token when calling Cloud endpoints in non-local mode
         host = (request.url.host or "").lower()
         is_cloud_host = host.endswith(".googleapis.com") or host.endswith(".run.app")

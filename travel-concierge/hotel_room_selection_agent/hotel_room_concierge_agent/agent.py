@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from hotel_room_concierge_agent.schemas import RoomsSelection, json_response_config
-from hotel_room_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -35,7 +34,7 @@ MODEL = Gemini(
 HOTEL_ROOM_SELECTION_INSTR = """
 Simulate available rooms for hotel chosen by the user, adjust pricing based on location/type of room.
 - You must generate a non-empty response if the user chooses a hotel.
-- Context hotel info: {hotel}
+- Context hotel info: {hotel?}
 
 When the hotel is in Cusco (such as Belmond Hotel Monasterio Cusco), ALWAYS return these 4 room choices so room names and rates ($450/night = $1,800 for 4 nights) match across the itinerary and checkout:
 {{
@@ -56,7 +55,6 @@ root_agent = Agent(
     output_schema=RoomsSelection,
     output_key="room",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

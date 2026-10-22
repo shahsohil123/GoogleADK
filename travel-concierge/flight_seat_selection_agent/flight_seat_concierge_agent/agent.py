@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from flight_seat_concierge_agent.schemas import SeatsSelection, json_response_config
-from flight_seat_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -36,7 +35,7 @@ FLIGHT_SEAT_SELECTION_INSTR = """
 Simulate available seats for flight number specified by the user, 6 seats on each row and 3 rows in total (Row 12, Row 4, and Row 1), adjust pricing based on location of seat.
 - You must generate a non-empty response if the user provides a flight number.
 - Always include Row 12 (with window seat "12A" available at $60 USD — best unobstructed Andean mountain view ahead of the wing), Row 4 (with window seat "4A" available at $70 USD), and Row 1 (with window seat "1A" available at $80 USD).
-- Context flight info: {flight}
+- Context flight info: {flight?}
 
 Example response format:
 {{
@@ -77,7 +76,6 @@ root_agent = Agent(
     output_schema=SeatsSelection,
     output_key="seat",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

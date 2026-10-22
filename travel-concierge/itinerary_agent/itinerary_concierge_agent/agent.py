@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from itinerary_concierge_agent.schemas import Itinerary, json_response_config
-from itinerary_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -36,18 +35,18 @@ ITINERARY_AGENT_INSTR = """
 Given a full itinerary plan provided by the planning agent or caller, generate a JSON object capturing that plan.
 
 Context details (also inspect the caller's request message for full flight/hotel/activity details):
-  <origin>{origin}</origin>
-  <destination>{destination}</destination>
-  <start_date>{start_date}</start_date>
-  <end_date>{end_date}</end_date>
-  <outbound_flight_selection>{outbound_flight_selection}</outbound_flight_selection>
-  <outbound_seat_number>{outbound_seat_number}</outbound_seat_number>
-  <return_flight_selection>{return_flight_selection}</return_flight_selection>
-  <return_seat_number>{return_seat_number}</return_seat_number>
-  <hotel_selection>{hotel_selection}</hotel_selection>
-  <room_selection>{room_selection}</room_selection>
+  <origin>{origin?}</origin>
+  <destination>{destination?}</destination>
+  <start_date>{start_date?}</start_date>
+  <end_date>{end_date?}</end_date>
+  <outbound_flight_selection>{outbound_flight_selection?}</outbound_flight_selection>
+  <outbound_seat_number>{outbound_seat_number?}</outbound_seat_number>
+  <return_flight_selection>{return_flight_selection?}</return_flight_selection>
+  <return_seat_number>{return_seat_number?}</return_seat_number>
+  <hotel_selection>{hotel_selection?}</hotel_selection>
+  <room_selection>{room_selection?}</room_selection>
 
-Current time: {_time}; Infer the Year from the time.
+Current time: {_time?}; Infer the Year from the time.
 
 The JSON object captures:
 - Metadata: trip_name, start_date, end_date, origin, destination.
@@ -63,7 +62,6 @@ root_agent = Agent(
     output_schema=Itinerary,
     output_key="itinerary",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

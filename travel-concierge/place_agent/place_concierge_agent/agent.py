@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from place_concierge_agent.schemas import DestinationIdeas, json_response_config
-from place_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -63,7 +62,6 @@ root_agent = Agent(
     output_schema=DestinationIdeas,
     output_key="place",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

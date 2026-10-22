@@ -23,7 +23,7 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 from google.adk.agents import Agent
 from google.genai.types import GenerateContentConfig
 from planning_concierge_agent.agent_discovery import call_agent_tool, discover_agents_tool
-from planning_concierge_agent.state_helpers import ensure_default_state, gate_redundant_tools, memorize, recall_preferences_tool, save_preference_tool
+from planning_concierge_agent.state_helpers import memorize, recall_preferences_tool, save_preference_tool
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -71,20 +71,20 @@ SPEED & RICHNESS REQUIREMENTS (CRITICAL):
     4. **Total Trip Investment Summary Table** (`$1,300` flights + `$120` window seats `12A` + `$1,800` 4-night luxury suite = **`$3,220 USD` total**).
 
 Current known trip state:
-  <origin>{origin}</origin>
-  <destination>{destination}</destination>
-  <start_date>{start_date}</start_date>
-  <end_date>{end_date}</end_date>
-  <outbound_flight_selection>{outbound_flight_selection}</outbound_flight_selection>
-  <outbound_seat_number>{outbound_seat_number}</outbound_seat_number>
-  <return_flight_selection>{return_flight_selection}</return_flight_selection>
-  <return_seat_number>{return_seat_number}</return_seat_number>
-  <hotel_selection>{hotel_selection}</hotel_selection>
-  <room_selection>{room_selection}</room_selection>
-  <poi>{poi}</poi>
-  <itinerary>{itinerary}</itinerary>
-  <user_profile>{user_profile}</user_profile>
-  Current time: {_time}
+  <origin>{origin?}</origin>
+  <destination>{destination?}</destination>
+  <start_date>{start_date?}</start_date>
+  <end_date>{end_date?}</end_date>
+  <outbound_flight_selection>{outbound_flight_selection?}</outbound_flight_selection>
+  <outbound_seat_number>{outbound_seat_number?}</outbound_seat_number>
+  <return_flight_selection>{return_flight_selection?}</return_flight_selection>
+  <return_seat_number>{return_seat_number?}</return_seat_number>
+  <hotel_selection>{hotel_selection?}</hotel_selection>
+  <room_selection>{room_selection?}</room_selection>
+  <poi>{poi?}</poi>
+  <itinerary>{itinerary?}</itinerary>
+  <user_profile>{user_profile?}</user_profile>
+  Current time: {_time?}
 """
 
 root_agent = Agent(
@@ -98,8 +98,6 @@ root_agent = Agent(
         top_p=0.5,
         thinking_config=_genai_types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
-    before_model_callback=gate_redundant_tools,
 )
 
 

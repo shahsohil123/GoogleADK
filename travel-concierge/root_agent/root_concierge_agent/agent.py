@@ -1,11 +1,5 @@
 import warnings
 warnings.filterwarnings("ignore")
-warnings.showwarning = lambda *args, **kwargs: None
-try:
-    from google.adk.features._feature_registry import FeatureName, _WARNED_FEATURES
-    _WARNED_FEATURES.update(FeatureName)
-except Exception:
-    pass
 """Root Travel Concierge Orchestrator (`root_agent`).
 
 Discovers and invokes all mid-level specialist A2A agents dynamically at
@@ -34,7 +28,7 @@ from google.adk.agents import Agent
 from google.adk.models.google_llm import Gemini
 from google.genai import types
 from root_concierge_agent.agent_discovery import call_agent_tool, discover_agents_tool
-from root_concierge_agent.state_helpers import ensure_default_state, gate_redundant_tools, memorize, recall_preferences_tool, save_preference_tool
+from root_concierge_agent.state_helpers import memorize, recall_preferences_tool, save_preference_tool
 
 MODEL = Gemini(
     model=os.environ.get("GENAI_MODEL", "gemini-3-flash-preview"),
@@ -70,17 +64,17 @@ IMPORTANT rules when calling remote A2A agents via `call_agent`:
 
 Current user profile:
   <user_profile>
-  {user_profile}
+  {user_profile?}
   </user_profile>
 
-Current time: {_time}
-Itinerary datetime override: {itinerary_datetime}
-Itinerary start date: {itinerary_start_date}
-Itinerary end date: {itinerary_end_date}
+Current time: {_time?}
+Itinerary datetime override: {itinerary_datetime?}
+Itinerary start date: {itinerary_start_date?}
+Itinerary end date: {itinerary_end_date?}
 
 Current itinerary:
   <itinerary>
-  {itinerary}
+  {itinerary?}
   </itinerary>
 """
 
@@ -93,8 +87,6 @@ root_agent = Agent(
     generate_content_config=types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
-    before_model_callback=gate_redundant_tools,
 )
 
 

@@ -93,6 +93,7 @@ env_vars = {
     "GENAI_MODEL": os.environ.get("GENAI_MODEL", "gemini-3-flash-preview"),
     "LOCAL_MODE": "false",
     "OTEL_TO_CLOUD": "true",
+    "OTEL_SERVICE_NAME": "in_trip_agent",
     "BQ_ANALYTICS_ENABLED": "true",
     "SESSION_AGENT_ENGINE_ID": os.environ["SESSION_AGENT_ENGINE_ID"],
     "MEMORY_AGENT_ENGINE_ID": os.environ["MEMORY_AGENT_ENGINE_ID"],

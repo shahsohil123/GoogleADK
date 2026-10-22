@@ -42,12 +42,4 @@ DEFAULT_STATE_KEYS = {
 }
 
 
-def ensure_default_state(callback_context: CallbackContext) -> None:
-    """Populates default session state keys in VertexAiSessionService before prompt interpolation."""
-    state = callback_context.state
-    if "_time" not in state:
-        state["_time"] = datetime.now().isoformat()
-    for key, default_val in DEFAULT_STATE_KEYS.items():
-        if key not in state:
-            state[key] = default_val
 

@@ -4,30 +4,33 @@ and BigQuery Agent Analytics Plugin.
 Supports two execution modes automatically:
 1. **Cloud / Vertex AI Mode** (when `LOCAL_MODE` is false and `SESSION_AGENT_ENGINE_ID`
    + `MEMORY_AGENT_ENGINE_ID` are configured):
-   - Uses `VertexAiSessionService` (`SESSION_AGENT_ENGINE_ID`)
+   - Uses ADK's built-in `VertexAiSessionService` (`SESSION_AGENT_ENGINE_ID`)
    - Uses `SharedVertexAiMemoryBankService` (`MEMORY_AGENT_ENGINE_ID`) pinned to
      `app_name="travel_concierge"` across all 16 agents.
 2. **Local / Docker Mode** (when `LOCAL_MODE=true` or `SESSION_AGENT_ENGINE_ID` /
    `MEMORY_AGENT_ENGINE_ID` are unset):
-   - Spins up a shared `InMemorySessionService`
-   - Spins up a shared `SharedInMemoryMemoryService` (`InMemoryMemoryService`
-     pinned to `app_name="travel_concierge"`).
+   - Uses ADK's built-in `InMemorySessionService`
+   - Uses `SharedInMemoryMemoryService` (`InMemoryMemoryService` pinned to
+     `app_name="travel_concierge"`).
 
-Also configures:
-- **Google Cloud Trace OpenTelemetry Exporter** (`setup_cloud_trace_telemetry`)
-  so all spans from `adk eval`, `adk web`, local Docker, and Agent Engine are
-  exported to Cloud Trace (`https://telemetry.googleapis.com/v1/traces`).
-- **BigQuery Agent Analytics Plugin** (`BigQueryAgentAnalyticsPlugin`) to stream
-  agent telemetry into BigQuery (`<PROJECT_ID>.agent_analytics.agent_events`)
-  with `create_views=True` for the Looker Marketplace Agent Analytics Block:
-  https://marketplace.looker.com/marketplace/detail/agent_analytics
+All services, OpenTelemetry exporters, and BigQuery analytics plugins are eagerly
+initialized at module import time to avoid lazy-loading latency.
 """
 
 import atexit
+from contextvars import ContextVar
 import logging
 import os
-from dotenv import load_dotenv, find_dotenv
+
+os.environ.setdefault("GRPC_DNS_RESOLVER", "native")
+
+from dotenv import find_dotenv, load_dotenv
+
 load_dotenv(find_dotenv(usecwd=True), override=False)
+# Always route Gemini / GenAI model calls to the global endpoint, even when
+# Vertex AI Agent Engine injects GOOGLE_CLOUD_LOCATION=us-central1 at runtime.
+os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
+os.environ["VERTEXAI_LOCATION"] = "global"
 
 import socket as _socket
 
@@ -42,78 +45,60 @@ def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 
 _socket.getaddrinfo = _ipv4_getaddrinfo
 
-try:
-    import time as _time
-    from copy import deepcopy as _deepcopy
-    from google.genai._api_client import BaseApiClient
-
-    BaseApiClient._use_aiohttp = lambda self: False
-    if not getattr(BaseApiClient, "_fast_fallback_patched", False):
-        _orig_async_req_once = BaseApiClient._async_request_once
-        _orig_sync_req_once = BaseApiClient._request_once
-        _fallback_until = 0.0
-
-        def _make_fallback_req(http_request):
-            req = _deepcopy(http_request)
-            req.url = (req.url or "").replace("gemini-3-flash-preview", "gemini-2.5-flash")
-            if isinstance(req.data, dict):
-                gen_cfg = req.data.get("generationConfig")
-                if isinstance(gen_cfg, dict):
-                    gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
-            req.timeout = 35.0
-            return req
-
-        async def _fast_async_request_once(self, http_request, stream=False):
-            global _fallback_until
-            url = http_request.url or ""
-            is_gen = ":generateContent" in url or ":streamGenerateContent" in url
-            if is_gen and "/locations/us-central1/publishers/google/models/gemini-3" in url:
-                url = url.replace("us-central1-aiplatform.googleapis.com", "aiplatform.googleapis.com").replace("/locations/us-central1/publishers/google/models/", "/locations/global/publishers/google/models/")
-                http_request.url = url
-            if is_gen and "gemini-3-flash-preview" in url:
-                if _time.monotonic() < _fallback_until:
-                    return await _orig_async_req_once(self, _make_fallback_req(http_request), stream=stream)
-                primary = _deepcopy(http_request)
-                primary.timeout = 25.0
-                try:
-                    return await _orig_async_req_once(self, primary, stream=stream)
-                except Exception:
-                    _fallback_until = _time.monotonic() + 30.0
-                    return await _orig_async_req_once(self, _make_fallback_req(http_request), stream=stream)
-            return await _orig_async_req_once(self, http_request, stream=stream)
-
-        def _fast_sync_request_once(self, http_request, stream=False):
-            global _fallback_until
-            url = http_request.url or ""
-            is_gen = ":generateContent" in url or ":streamGenerateContent" in url
-            if is_gen and "/locations/us-central1/publishers/google/models/gemini-3" in url:
-                url = url.replace("us-central1-aiplatform.googleapis.com", "aiplatform.googleapis.com").replace("/locations/us-central1/publishers/google/models/", "/locations/global/publishers/google/models/")
-                http_request.url = url
-            if is_gen and "gemini-3-flash-preview" in url:
-                if _time.monotonic() < _fallback_until:
-                    return _orig_sync_req_once(self, _make_fallback_req(http_request), stream=stream)
-                primary = _deepcopy(http_request)
-                primary.timeout = 25.0
-                try:
-                    return _orig_sync_req_once(self, primary, stream=stream)
-                except Exception:
-                    _fallback_until = _time.monotonic() + 30.0
-                    return _orig_sync_req_once(self, _make_fallback_req(http_request), stream=stream)
-            return _orig_sync_req_once(self, http_request, stream=stream)
-
-        BaseApiClient._async_request_once = _fast_async_request_once
-        BaseApiClient._request_once = _fast_sync_request_once
-        BaseApiClient._fast_fallback_patched = True
-except Exception:
-    pass
-
 from google.adk.memory import InMemoryMemoryService, VertexAiMemoryBankService
 from google.adk.sessions import InMemorySessionService, VertexAiSessionService
+from opentelemetry import trace
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
 logger = logging.getLogger(__name__)
 
 SHARED_MEMORY_APP_NAME = "travel_concierge"
+AGENT_SERVICE_NAME = "in_trip_agent"
+os.environ["OTEL_SERVICE_NAME"] = AGENT_SERVICE_NAME
 _OTEL_INITIALIZED = False
+current_traceparent: ContextVar[str] = ContextVar("current_traceparent", default="")
+
+
+def format_current_traceparent() -> str:
+    """Formats the active OpenTelemetry span into a W3C `traceparent` string
+    (`00-<32-hex-trace-id>-<16-hex-span-id>-<2-hex-flags>`).
+    """
+    try:
+        span = trace.get_current_span()
+        if span is not None:
+            sc = span.get_span_context()
+            if sc and sc.is_valid:
+                flags = int(sc.trace_flags) if sc.trace_flags is not None else 1
+                return f"00-{sc.trace_id:032x}-{sc.span_id:016x}-{flags:02x}"
+    except Exception:
+        pass
+    return current_traceparent.get() or ""
+
+
+def extract_otel_context_from_traceparent(traceparent_str: str | None):
+    """Parses a W3C `traceparent` header or metadata value into an OpenTelemetry
+    `Context` whose current span is the remote caller's span, linking child spans
+    across A2A agent invocations under the same `trace_id` and `parent_span_id`.
+    """
+    if not traceparent_str or not isinstance(traceparent_str, str):
+        return None
+    try:
+        parts = traceparent_str.strip().split("-")
+        if len(parts) >= 4 and len(parts[1]) == 32 and len(parts[2]) == 16:
+            trace_id = int(parts[1], 16)
+            span_id = int(parts[2], 16)
+            flags = int(parts[3], 16) if len(parts[3]) == 2 else 1
+            if trace_id and span_id:
+                parent_sc = SpanContext(
+                    trace_id=trace_id,
+                    span_id=span_id,
+                    is_remote=True,
+                    trace_flags=TraceFlags(flags or 1),
+                )
+                return trace.set_span_in_context(NonRecordingSpan(parent_sc))
+    except Exception:
+        pass
+    return None
 
 
 def is_local_mode() -> bool:
@@ -125,26 +110,24 @@ def is_local_mode() -> bool:
     return False
 
 
-def setup_cloud_trace_telemetry(service_name: str = "travel-concierge") -> bool:
+def setup_cloud_trace_telemetry(service_name: str = AGENT_SERVICE_NAME) -> bool:
     """Configures OpenTelemetry to export all ADK, GenAI SDK, and HTTPX A2A
     traces to Google Cloud Trace (`telemetry.googleapis.com/v1/traces`),
     including during `adk eval` runs.
-
-    Controlled via `OTEL_TO_CLOUD` (default `"true"`). Registers an `atexit`
-    hook to `force_flush()` the `TracerProvider` so short-lived CLI processes
-    such as `adk eval` flush all spans before exiting.
     """
     global _OTEL_INITIALIZED
     if _OTEL_INITIALIZED:
         return True
 
     if is_local_mode() and os.environ.get("OTEL_ENABLE_IN_LOCAL", "false").strip().lower() not in ("1", "true", "yes"):
-        # Stateless local mode: configure local TracerProvider only (zero GCP Cloud Trace connections)
         try:
-            from opentelemetry import trace
+            from opentelemetry.sdk.resources import Resource as _OtelResource
             from opentelemetry.sdk.trace import TracerProvider
+
             if not isinstance(trace.get_tracer_provider(), TracerProvider):
-                trace.set_tracer_provider(TracerProvider())
+                trace.set_tracer_provider(
+                    TracerProvider(resource=_OtelResource(attributes={"service.name": service_name}))
+                )
             _OTEL_INITIALIZED = True
         except Exception:
             pass
@@ -158,11 +141,10 @@ def setup_cloud_trace_telemetry(service_name: str = "travel-concierge") -> bool:
     if not project_id or project_id == "your-gcp-project-id":
         return False
 
-    os.environ.setdefault("OTEL_SERVICE_NAME", service_name)
+    os.environ["OTEL_SERVICE_NAME"] = service_name
 
     try:
         import google.auth
-        from opentelemetry import trace
         from google.adk.telemetry.google_cloud import get_gcp_exporters, get_gcp_resource
         from google.adk.telemetry.setup import maybe_set_otel_providers
 
@@ -175,11 +157,27 @@ def setup_cloud_trace_telemetry(service_name: str = "travel-concierge") -> bool:
             enable_cloud_logging=False,
             google_auth=(credentials, effective_project),
         )
-        otel_resource = get_gcp_resource(effective_project)
-        maybe_set_otel_providers(
-            otel_hooks_to_setup=[otel_hooks],
-            otel_resource=otel_resource,
+        from opentelemetry.sdk.resources import Resource as _OtelResource
+        from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
+
+        otel_resource = get_gcp_resource(effective_project).merge(
+            _OtelResource(attributes={"service.name": service_name})
         )
+        current_provider = trace.get_tracer_provider()
+        if isinstance(current_provider, _SdkTracerProvider):
+            try:
+                current_provider._resource = current_provider._resource.merge(
+                    _OtelResource(attributes={"service.name": service_name})
+                )
+            except Exception:
+                pass
+            for sp in otel_hooks.span_processors:
+                current_provider.add_span_processor(sp)
+        else:
+            maybe_set_otel_providers(
+                otel_hooks_to_setup=[otel_hooks],
+                otel_resource=otel_resource,
+            )
 
         try:
             from opentelemetry.instrumentation.google_genai import GoogleGenAiSdkInstrumentor
@@ -278,7 +276,10 @@ class SharedInMemoryMemoryService(InMemoryMemoryService):
 
 
 _LOCAL_SESSION_SERVICE: InMemorySessionService | None = None
+_CLOUD_SESSION_SERVICE: VertexAiSessionService | None = None
 _LOCAL_MEMORY_SERVICE: SharedInMemoryMemoryService | None = None
+_CLOUD_MEMORY_SERVICE: SharedVertexAiMemoryBankService | None = None
+_BQ_PLUGIN_CACHE: dict[str, list] = {}
 
 
 def _location() -> str:
@@ -286,43 +287,54 @@ def _location() -> str:
 
 
 def build_session_service():
-    """Returns `InMemorySessionService` in local mode or `VertexAiSessionService` in cloud mode."""
-    global _LOCAL_SESSION_SERVICE
+    """Returns ADK's built-in `InMemorySessionService` (local mode) or
+    `VertexAiSessionService` (cloud mode) singleton.
+    """
+    global _LOCAL_SESSION_SERVICE, _CLOUD_SESSION_SERVICE
     if is_local_mode():
         if _LOCAL_SESSION_SERVICE is None:
             _LOCAL_SESSION_SERVICE = InMemorySessionService()
         return _LOCAL_SESSION_SERVICE
-    return VertexAiSessionService(
-        project=os.environ["GOOGLE_CLOUD_PROJECT"],
-        location=_location(),
-        agent_engine_id=os.environ["SESSION_AGENT_ENGINE_ID"],
-    )
+    if _CLOUD_SESSION_SERVICE is None:
+        _CLOUD_SESSION_SERVICE = VertexAiSessionService(
+            project=os.environ["GOOGLE_CLOUD_PROJECT"],
+            location=_location(),
+            agent_engine_id=os.environ["SESSION_AGENT_ENGINE_ID"],
+        )
+    return _CLOUD_SESSION_SERVICE
 
 
 def build_memory_service():
-    """Returns `SharedInMemoryMemoryService` in local mode or `SharedVertexAiMemoryBankService` in cloud mode."""
-    global _LOCAL_MEMORY_SERVICE
+    """Returns the pre-initialized `SharedInMemoryMemoryService` (local mode) or
+    `SharedVertexAiMemoryBankService` (cloud mode) singleton.
+    """
+    global _LOCAL_MEMORY_SERVICE, _CLOUD_MEMORY_SERVICE
     if is_local_mode():
         if _LOCAL_MEMORY_SERVICE is None:
             _LOCAL_MEMORY_SERVICE = SharedInMemoryMemoryService()
         return _LOCAL_MEMORY_SERVICE
-    return SharedVertexAiMemoryBankService(
-        project=os.environ["GOOGLE_CLOUD_PROJECT"],
-        location=_location(),
-        agent_engine_id=os.environ["MEMORY_AGENT_ENGINE_ID"],
-    )
+    if _CLOUD_MEMORY_SERVICE is None:
+        _CLOUD_MEMORY_SERVICE = SharedVertexAiMemoryBankService(
+            project=os.environ["GOOGLE_CLOUD_PROJECT"],
+            location=_location(),
+            agent_engine_id=os.environ["MEMORY_AGENT_ENGINE_ID"],
+        )
+    return _CLOUD_MEMORY_SERVICE
 
 
 def build_bigquery_analytics_plugin(agent_name: str, framework: str = "google_adk") -> list:
-    """Builds the ADK `BigQueryAgentAnalyticsPlugin` for streaming agent events
-    to BigQuery and visualizing in the Looker Marketplace Agent Analytics Block.
+    """Builds and caches the ADK `BigQueryAgentAnalyticsPlugin` for streaming agent
+    events to BigQuery and visualizing in the Looker Marketplace Agent Analytics Block.
     """
     if is_local_mode() and os.environ.get("BQ_ENABLE_IN_LOCAL", "false").strip().lower() not in ("1", "true", "yes"):
-        # Stateless local mode: do not connect to BigQuery when running locally
         return []
     enabled_str = os.environ.get("BQ_ANALYTICS_ENABLED", "true").strip().lower()
     if enabled_str in ("0", "false", "no", "off"):
         return []
+
+    cache_key = f"{agent_name}:{framework}"
+    if cache_key in _BQ_PLUGIN_CACHE:
+        return _BQ_PLUGIN_CACHE[cache_key]
 
     project_id = (
         os.environ.get("BQ_ANALYTICS_PROJECT_ID")
@@ -346,8 +358,8 @@ def build_bigquery_analytics_plugin(agent_name: str, framework: str = "google_ad
         config = BigQueryLoggerConfig(
             enabled=True,
             table_id=table_id,
-            create_views=True,
-            auto_schema_upgrade=True,
+            create_views=False,
+            auto_schema_upgrade=False,
             log_multi_modal_content=True,
             log_session_metadata=True,
             enable_otel_correlation=True,
@@ -365,7 +377,14 @@ def build_bigquery_analytics_plugin(agent_name: str, framework: str = "google_ad
             location=location,
             config=config,
         )
-        return [plugin]
+        _BQ_PLUGIN_CACHE[cache_key] = [plugin]
+        return _BQ_PLUGIN_CACHE[cache_key]
     except Exception as exc:
         logger.debug("BigQueryAgentAnalyticsPlugin not initialized for %s: %s", agent_name, exc)
         return []
+
+
+# Eagerly initialize OpenTelemetry, SessionService, and MemoryBankService at import time
+setup_cloud_trace_telemetry(AGENT_SERVICE_NAME)
+SESSION_SERVICE = build_session_service()
+MEMORY_SERVICE = build_memory_service()

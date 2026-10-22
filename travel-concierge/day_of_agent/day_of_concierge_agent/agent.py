@@ -17,7 +17,7 @@ os.environ["ADK_SUPPRESS_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
-from day_of_concierge_agent.state_helpers import DEFAULT_USER_PROFILE, ensure_default_state
+from day_of_concierge_agent.state_helpers import DEFAULT_USER_PROFILE
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -155,7 +155,6 @@ root_agent = Agent(
     generate_content_config=_genai_types.GenerateContentConfig(
         thinking_config=_genai_types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
 )
 
 

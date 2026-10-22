@@ -20,7 +20,7 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from inspiration_concierge_agent.agent_discovery import call_agent_tool, discover_agents_tool
-from inspiration_concierge_agent.state_helpers import ensure_default_state, gate_redundant_tools, memorize, recall_preferences_tool, save_preference_tool
+from inspiration_concierge_agent.state_helpers import memorize, recall_preferences_tool, save_preference_tool
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -60,10 +60,10 @@ Optimal flow & rich response requirements:
 
 Current user profile:
   <user_profile>
-  {user_profile}
+  {user_profile?}
   </user_profile>
 
-Current time: {_time}
+Current time: {_time?}
 """
 
 root_agent = Agent(
@@ -75,8 +75,6 @@ root_agent = Agent(
     generate_content_config=_genai_types.GenerateContentConfig(
         thinking_config=_genai_types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
-    before_model_callback=gate_redundant_tools,
 )
 
 

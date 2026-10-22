@@ -15,7 +15,6 @@ os.environ["ADK_SUPPRESS_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
-from trip_monitor_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -54,8 +53,8 @@ def weather_impact_check(
 
 
 TRIP_MONITOR_INSTR = """
-Given the itinerary or flight/trip details in the conversation message or state (`{itinerary}`) and user profile (`{user_profile}`):
-If neither the message nor `{itinerary}` mentions any flights, destination, hotel, or trip events at all, inform the caller that an itinerary is required to monitor trip events.
+Given the itinerary or flight/trip details in the conversation message or state (`{itinerary?}`) and user profile (`{user_profile?}`):
+If neither the message nor `{itinerary?}` mentions any flights, destination, hotel, or trip events at all, inform the caller that an itinerary is required to monitor trip events.
 
 Otherwise (including when the caller mentions arriving in Cusco or asks to check flights for Cusco / Belmond Hotel Monasterio), identify the flights, events, and outdoor activities (for Cusco trips, default to LATAM flights `LA2405` on `2027-05-10` and `LA2406` on `2027-05-14` if specific flight numbers were not passed) and check their status using your tools in parallel:
 - Flights delays or cancellations -> use `flight_status_check`
@@ -75,7 +74,6 @@ root_agent = Agent(
     generate_content_config=_genai_types.GenerateContentConfig(
         thinking_config=_genai_types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
 )
 
 

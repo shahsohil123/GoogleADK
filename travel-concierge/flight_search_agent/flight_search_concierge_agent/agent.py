@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from flight_search_concierge_agent.schemas import FlightsSelection, json_response_config
-from flight_search_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -36,9 +35,9 @@ FLIGHT_SEARCH_INSTR = """
 Generate search results for flights from origin to destination inferred from user query. Use the exact travel dates specified by the user (or future dates within 3 months from today's date only if the user did not specify dates), limit to 4 results.
 - Ask for any details you don't know, like origin and destination, etc.
 - You must generate a non-empty JSON response if the user provides origin and destination location.
-- Current time: {_time}
-- Context user profile: {user_profile}
-- Context origin: {origin} and destination: {destination}
+- Current time: {_time?}
+- Context user profile: {user_profile?}
+- Context origin: {origin?} and destination: {destination?}
 
 IMPORTANT — Canonical Schedule for San Francisco (SFO) <-> Cusco (CUZ):
 When the user searches for flights between San Francisco (SFO) and Cusco (CUZ) (e.g. May 10, 2027 to May 14, 2027), ALWAYS return these exact 4 flights so all downstream seat, itinerary, booking, and monitoring agents share identical flight numbers, times, and prices:
@@ -81,7 +80,6 @@ root_agent = Agent(
     output_schema=FlightsSelection,
     output_key="flight",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

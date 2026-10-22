@@ -16,7 +16,6 @@ os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
 from hotel_search_concierge_agent.schemas import HotelsSelection, json_response_config
-from hotel_search_concierge_agent.state_helpers import ensure_default_state
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -36,9 +35,9 @@ HOTEL_SEARCH_INSTR = """
 Generate search results for hotels for hotel_location inferred from user query. Find only 4 results.
 - Ask for any details you don't know, like check_in_date, check_out_date, places_of_interest.
 - You must generate a non-empty JSON response if the user provides a hotel_location / destination.
-- Current time: {_time}
-- User profile: {user_profile}
-- Origin: {origin}, Destination: {destination}
+- Current time: {_time?}
+- User profile: {user_profile?}
+- Origin: {origin?}, Destination: {destination?}
 
 IMPORTANT — Canonical Luxury Hotels for Cusco, Peru:
 When the destination is Cusco, Peru, ALWAYS return these exact 4 properties so downstream room selection, itinerary, and booking agents use identical names, addresses, and rates:
@@ -70,7 +69,6 @@ root_agent = Agent(
     output_schema=HotelsSelection,
     output_key="hotel",
     generate_content_config=json_response_config,
-    before_agent_callback=ensure_default_state,
 )
 
 

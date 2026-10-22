@@ -1,6 +1,10 @@
-"""CrewAI Crew for `pre_trip_agent`, wired to the shared Vertex AI Memory Bank."""
+"""CrewAI Crew for `pre_trip_agent`, wired to the shared Vertex AI Memory Bank
+and OpenTelemetry Cloud Trace.
+"""
 
 import os
+
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "true")
 
 from crewai import Agent, Crew, LLM, Process, Task
 
@@ -14,16 +18,18 @@ from pre_trip_crewai_agent.tools import (
 def _build_llm() -> LLM:
     model_name = os.environ.get("PRE_TRIP_MODEL", "vertex_ai/gemini-3-flash-preview")
     project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("VERTEXAI_PROJECT")
-    location = "global"
     os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
     os.environ["VERTEXAI_LOCATION"] = "global"
     if project:
         os.environ["VERTEXAI_PROJECT"] = project
-    return LLM(model=model_name, temperature=0.2, num_retries=5, reasoning_effort="low")
+    return LLM(model=model_name, num_retries=5, reasoning_effort="low")
+
+
+_LLM: LLM = _build_llm()
 
 
 def build_pre_trip_crew() -> Crew:
-    llm = _build_llm()
+    llm = _LLM
 
     readiness_researcher = Agent(
         role="Pre-Trip Readiness & Travel Advisory Researcher",
@@ -116,4 +122,6 @@ def build_pre_trip_crew() -> Crew:
         tasks=[research_task, packing_and_briefing_task],
         process=Process.sequential,
         verbose=False,
+        tracing=True,
+        share_crew=True,
     )

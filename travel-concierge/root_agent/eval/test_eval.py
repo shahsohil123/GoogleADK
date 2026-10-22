@@ -104,7 +104,6 @@ from root_concierge_agent.agent_discovery import call_agent, discover_agents
 from root_concierge_agent.runner import create_runner
 from root_concierge_agent.state_helpers import (
     DEFAULT_STATE_KEYS,
-    ensure_default_state,
     memorize,
     recall_preferences,
     save_preference,
@@ -298,7 +297,8 @@ async def test_local_mode_and_cloud_trace_and_bigquery_setup():
         p = plugins[0]
         assert p.dataset_id == "agent_analytics"
         assert p.table_id == "agent_events"
-        assert p.config.create_views is True
+        assert p.config.create_views is False
+        assert p.config.auto_schema_upgrade is False
         assert p.config.enable_otel_correlation is True
         assert p.config.custom_tags["app"] == SHARED_MEMORY_APP_NAME
     assert root_app.root_agent is root_agent

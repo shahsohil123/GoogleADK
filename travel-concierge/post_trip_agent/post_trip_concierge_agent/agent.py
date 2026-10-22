@@ -15,7 +15,7 @@ os.environ["ADK_SUPPRESS_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 os.environ["ADK_SUPPRESS_A2A_EXPERIMENTAL_FEATURE_WARNINGS"] = "true"
 
 from google.adk.agents import Agent
-from post_trip_concierge_agent.state_helpers import ensure_default_state, gate_redundant_tools, memorize, recall_preferences_tool, save_preference_tool
+from post_trip_concierge_agent.state_helpers import memorize, recall_preferences_tool, save_preference_tool
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types as _genai_types
@@ -32,7 +32,7 @@ MODEL = Gemini(
 )
 
 POSTTRIP_INSTR = """
-You are a post-trip travel assistant. Based on the user's request and any provided trip information (`{itinerary}`), assist the user with post-trip matters and store their learned travel preferences into the shared Memory Bank.
+You are a post-trip travel assistant. Based on the user's request and any provided trip information (`{itinerary?}`), assist the user with post-trip matters and store their learned travel preferences into the shared Memory Bank.
 
 If no itinerary or trip experience is shared yet, ask the traveler about their recent trip or let them know you can help once there is an itinerary.
 
@@ -50,8 +50,6 @@ root_agent = Agent(
     generate_content_config=_genai_types.GenerateContentConfig(
         thinking_config=_genai_types.ThinkingConfig(thinking_level="LOW"),
     ),
-    before_agent_callback=ensure_default_state,
-    before_model_callback=gate_redundant_tools,
 )
 
 
