@@ -50,7 +50,9 @@ _tracer = trace.get_tracer("travel_concierge.agent_discovery")
 _NOT_CALLABLE_AGENTS = {
     "travel-concierge-shared-state",
     "travel-concierge-memory-bank",
+    "Workspace Agent",
 }
+_SEARCH_STOPWORDS = {"and", "for", "the", "with", "from", "into", "agent", "agents", "help", "need"}
 
 _LOCAL_AGENT_CATALOG: Dict[str, Dict[str, Any]] = {
     "root_agent": {
@@ -264,28 +266,22 @@ class HybridAgentRegistry(AgentRegistry):
         if is_local_mode():
             return self._local_fallback_request(path, method, params, json_data)
 
-        try:
-            data = super()._make_request(path, method=method, params=params, json_data=json_data)
-            if isinstance(data, dict):
-                eng_loc = os.environ.get("VERTEX_ENGINE_LOCATION", "us-central1")
-                raw_json = (
-                    json.dumps(data)
-                    .replace("global-aiplatform.googleapis.com", f"{eng_loc}-aiplatform.googleapis.com")
-                    .replace("/locations/global/reasoningEngines/", f"/locations/{eng_loc}/reasoningEngines/")
-                    .replace('"streaming": true', '"streaming": false')
+        if "/agents/" in path:
+            tail = path.rsplit("/agents/", 1)[-1]
+            if tail in _resolved_name_cache:
+                path = _resolved_name_cache[tail]
+
+        data = super()._make_request(path, method=method, params=params, json_data=json_data)
+        if isinstance(data, dict):
+            eng_loc = os.environ.get("VERTEX_ENGINE_LOCATION", "us-central1")
+            raw_json = (
+                json.dumps(data)
+                .replace("global-aiplatform.googleapis.com", f"{eng_loc}-aiplatform.googleapis.com")
+                .replace("/locations/global/reasoningEngines/", f"/locations/{eng_loc}/reasoningEngines/")
+                .replace('"streaming": true', '"streaming": false')
             )
-                data = json.loads(raw_json)
-            if "agents" in path and not any(
-                a.get("displayName", "").replace("-", "_").removesuffix("_a2a") in _LOCAL_AGENT_CATALOG
-                or a.get("displayName") in _LOCAL_AGENT_CATALOG
-                for a in data.get("agents", [])
-            ):
-                local_data = self._local_fallback_request(path, method, params, json_data)
-                if local_data:
-                    return local_data
-            return data
-        except Exception:
-            return self._local_fallback_request(path, method, params, json_data)
+            data = json.loads(raw_json)
+        return data
 
 
 async def _prepare_a2a_request(ctx: InvocationContext, a2a_request, parameters):
@@ -484,7 +480,11 @@ async def discover_agents(capability: str, tool_context: ToolContext) -> dict:
         ]
 
         if not matches:
-            words = [w for w in capability.lower().replace("_", " ").split() if len(w) > 2]
+            words = [
+                w
+                for w in capability.lower().replace("_", " ").split()
+                if len(w) > 2 and w not in _SEARCH_STOPWORDS
+            ]
             all_agents = _registry.list_agents().get("agents", [])
             for agent in all_agents:
                 if not _is_callable_a2a_agent(agent, own_name):
@@ -525,14 +525,14 @@ async def call_agent(agent_name: str, message: str, tool_context: ToolContext) -
     raw_caller = getattr(getattr(inv_ctx, "agent", None), "name", None)
     caller_name = raw_caller if isinstance(raw_caller, str) and raw_caller else "unknown"
 
-    if not agent_name.startswith("projects/"):
-        if agent_name in _resolved_name_cache:
-            agent_name = _resolved_name_cache[agent_name]
-        else:
-            disc = await discover_agents(agent_name, tool_context)
-            if disc.get("found") and disc.get("matches"):
-                _resolved_name_cache[agent_name] = disc["matches"][0]["agent_name"]
-                agent_name = _resolved_name_cache[agent_name]
+    short_key = agent_name.rsplit("/agents/", 1)[-1] if "/agents/" in agent_name else agent_name
+    if short_key in _resolved_name_cache:
+        agent_name = _resolved_name_cache[short_key]
+    elif not agent_name.startswith("projects/") or short_key in _LOCAL_AGENT_CATALOG:
+        disc = await discover_agents(short_key, tool_context)
+        if disc.get("found") and disc.get("matches"):
+            _resolved_name_cache[short_key] = disc["matches"][0]["agent_name"]
+            agent_name = _resolved_name_cache[short_key]
 
     with _tracer.start_as_current_span("agent_registry.call_agent") as span:
         span.set_attribute("adk.agent_registry.caller_agent", caller_name)
