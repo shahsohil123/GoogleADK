@@ -52,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 SHARED_APP_NAME = "travel_concierge"
 AGENT_APP_NAME = "pre_trip_agent"
+AGENT_SERVICE_NAME = "pre_trip_agent"
+os.environ["OTEL_SERVICE_NAME"] = AGENT_SERVICE_NAME
 current_user_id: ContextVar[str] = ContextVar("current_user_id", default="default_user")
 current_traceparent: ContextVar[str] = ContextVar("current_traceparent", default="")
 

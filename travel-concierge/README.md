@@ -46,7 +46,7 @@ cp .env.dev.example .env.dev
 ```
 
 - **`.env` (Local Mode)**: Sets `LOCAL_MODE=true`, `OTEL_TO_CLOUD=false`, `BQ_ANALYTICS_ENABLED=false`, `GOOGLE_CLOUD_LOCATION=global`, and `GENAI_MODEL=gemini-3-flash-preview`. Contains **no** `SESSION_AGENT_ENGINE_ID` or `MEMORY_AGENT_ENGINE_ID`.
-- **`.env.dev` (Cloud Agent Runtime Mode)**: Loaded by `deploy_byoc.py` and `delete_byoc.py`. Sets `LOCAL_MODE=false`, `SESSION_AGENT_ENGINE_ID`, `MEMORY_AGENT_ENGINE_ID`, `OTEL_TO_CLOUD=true`, and `BQ_ANALYTICS_ENABLED=true`.
+- **`.env.dev` (Cloud Agent Runtime Mode)**: Loaded by `deploy_byoc.py` and `delete_byoc.py`. Sets `LOCAL_MODE=false`, `GOOGLE_CLOUD_LOCATION=global`, `VERTEX_ENGINE_LOCATION=us-central1`, `SESSION_AGENT_ENGINE_ID`, `MEMORY_AGENT_ENGINE_ID`, `OTEL_TO_CLOUD=true`, and `BQ_ANALYTICS_ENABLED=true`.
 
 ---
 
@@ -181,12 +181,13 @@ make setup-bigquery
 ```
 
 ### Step 4: Build & Push All 16 Container Images to Artifact Registry
-Each agent's `Dockerfile` uses `uv` (`COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv`) and layer caching (`COPY requirements.txt .` before `COPY . .`) for fast builds. `make build-images-all` automatically skips images already present in Artifact Registry (unless `FORCE_BUILD=true`) and prints a 16-agent verification report at completion:
+Each agent's `Dockerfile` uses `uv` (`COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv`) and layer caching (`COPY requirements.txt .` before `COPY . .`) for fast builds. `make build-images-all` rebuilds and pushes all 16 images in parallel (or pass `SKIP_EXISTING=true` to only build missing images) and prints a 16-agent verification report at completion:
 ```bash
+# Build and push all 16 container images to Artifact Registry:
 make build-images-all
 
-# Force rebuild all 16 container images:
-make build-images-all FORCE_BUILD=true
+# Skip images already present in Artifact Registry:
+make build-images-all SKIP_EXISTING=true
 ```
 
 ### Step 5: Deploy or Update All 16 BYOC A2A Agents & Verify Status
