@@ -27,6 +27,18 @@ RUNNER: Runner = Runner(
     auto_create_session=True,
 )
 
+# Pre-warm ADK lazy caches (_id_pairing_model_types, Gemini.api_client, FunctionTool declarations)
+# at container startup so the first user request does not pay 15-30s of lazy import/schema overhead.
+try:
+    from google.adk.flows.llm_flows.contents import _id_pairing_model_types
+
+    _id_pairing_model_types()
+    for _tool in getattr(_APP.root_agent, "tools", None) or []:
+        if hasattr(_tool, "_get_declaration"):
+            _tool._get_declaration()
+except Exception:
+    pass
+
 
 async def create_runner() -> Runner:
     current_session_service = build_session_service()

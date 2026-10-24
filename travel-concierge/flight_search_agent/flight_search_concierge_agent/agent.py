@@ -75,6 +75,7 @@ Return the response as a JSON object formatted like this:
 root_agent = Agent(
     model=MODEL,
     name="flight_search_agent",
+    include_contents="none",
     description="Help users find best flight deals between an origin and destination.",
     instruction=FLIGHT_SEARCH_INSTR,
     output_schema=FlightsSelection,
@@ -83,7 +84,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from flight_search_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -93,5 +93,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

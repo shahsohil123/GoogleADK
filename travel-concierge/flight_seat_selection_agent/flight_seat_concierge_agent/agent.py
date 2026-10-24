@@ -71,6 +71,7 @@ Example response format:
 root_agent = Agent(
     model=MODEL,
     name="flight_seat_selection_agent",
+    include_contents="none",
     description="Help users with seat choices and pricing for a selected flight.",
     instruction=FLIGHT_SEAT_SELECTION_INSTR,
     output_schema=SeatsSelection,
@@ -79,7 +80,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from flight_seat_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -89,5 +89,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

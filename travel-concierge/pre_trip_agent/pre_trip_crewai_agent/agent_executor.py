@@ -126,25 +126,54 @@ class PreTripAgentExecutor(AgentExecutor):
 
                 resolved_session_id = context.context_id
                 history_lines: list[str] = []
-                try:
-                    resolved_session_id, history_lines, _ = await load_or_create_vertex_session(
-                        context.context_id, user_id
-                    )
-                except Exception:
-                    history_lines = []
-                history_str = "\n".join(history_lines[-6:]) if history_lines else "None"
+                session_state: dict = {}
+
+                async def _load_sess():
+                    try:
+                        return await load_or_create_vertex_session(context.context_id, user_id)
+                    except Exception:
+                        return context.context_id, [], {}
+
+                async def _load_mem():
+                    try:
+                        return await asyncio.to_thread(
+                            search_memory_facts_sync,
+                            "itinerary destination origin dates nationality preferences",
+                            user_id,
+                        )
+                    except Exception:
+                        return []
+
+                (resolved_session_id, history_lines, session_state), recalled = await asyncio.gather(
+                    _load_sess(), _load_mem()
+                )
+                if history_lines:
+                    history_str = "\n".join(history_lines[-6:])
+                elif session_state:
+                    state_summary = {
+                        k: session_state[k]
+                        for k in (
+                            "user_profile",
+                            "origin",
+                            "destination",
+                            "start_date",
+                            "end_date",
+                            "outbound_flight_selection",
+                            "return_flight_selection",
+                            "hotel_selection",
+                            "itinerary",
+                        )
+                        if session_state.get(k)
+                    }
+                    history_str = str(state_summary) if state_summary else "None"
+                else:
+                    history_str = "None"
+
+                memories_str = "\n".join(f"- {f}" for f in recalled) if recalled else "None"
 
                 span.set_attribute("gen_ai.agent.name", "pre_trip_agent")
                 span.set_attribute("gen_ai.conversation.id", resolved_session_id)
                 span.set_attribute("adk.user_id", user_id)
-
-                try:
-                    recalled = search_memory_facts_sync(
-                        "itinerary destination origin dates nationality preferences", user_id=user_id
-                    )
-                    memories_str = "\n".join(f"- {f}" for f in recalled) if recalled else "None"
-                except Exception:
-                    memories_str = "None"
 
                 crew = build_pre_trip_crew()
                 result = await crew.kickoff_async(

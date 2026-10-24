@@ -90,6 +90,7 @@ Current known trip state:
 root_agent = Agent(
     model=MODEL,
     name="planning_agent",
+    include_contents="none",
     description="Helps users with travel planning, completing a full itinerary for their vacation, and finding best deals for flights, seats, hotels, and rooms.",
     instruction=PLANNING_AGENT_INSTR,
     tools=[call_agent_tool],
@@ -101,7 +102,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from planning_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -111,5 +111,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

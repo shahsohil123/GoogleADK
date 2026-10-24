@@ -131,12 +131,17 @@ class BookingAgentExecutor(AgentExecutor):
 
                 resolved_session_id = context.context_id
                 input_messages: list[tuple[str, str]] = []
+                session_state: dict = {}
                 try:
-                    resolved_session_id, prior_messages, _ = await load_or_create_vertex_session(
+                    resolved_session_id, prior_messages, session_state = await load_or_create_vertex_session(
                         context.context_id, user_id
                     )
                 except Exception:
                     prior_messages = []
+                    session_state = {}
+
+                if isinstance(session_state.get("reservations"), dict):
+                    _RESERVATIONS.update(session_state["reservations"])
 
                 span.set_attribute("gen_ai.agent.name", "booking_agent")
                 span.set_attribute("gen_ai.conversation.id", resolved_session_id)

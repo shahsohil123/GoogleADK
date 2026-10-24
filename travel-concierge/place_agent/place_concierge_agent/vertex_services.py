@@ -25,6 +25,7 @@ import os
 os.environ.setdefault("GRPC_DNS_RESOLVER", "native")
 os.environ.setdefault("OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
 os.environ.setdefault("OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT", "16000")
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -278,8 +279,64 @@ class SharedInMemoryMemoryService(InMemoryMemoryService):
         return await super().add_session_to_memory(session_copy)
 
 
+class SharedVertexAiSessionService(VertexAiSessionService):
+    """Fetches `session.state` via `GetSessionConfig(num_recent_events=0)` without
+    downloading hundreds of historical events (`sessions.events.list`) on every
+    agent invocation, and caches `get_session` briefly so consecutive
+    `_resolve_session` + `_get_or_create_session` calls do not make duplicate
+    network round-trips.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._recent_session_cache: dict[tuple[str, str], tuple[float, object]] = {}
+
+    async def get_session(self, *, app_name: str, user_id: str, session_id: str, config=None):
+        import time
+        from google.adk.sessions.base_session_service import GetSessionConfig
+
+        cache_key = (user_id, session_id)
+        now = time.monotonic()
+        cached = self._recent_session_cache.get(cache_key)
+        if cached is not None and (now - cached[0]) < 2.5:
+            return cached[1].model_copy(deep=True)
+
+        session = await super().get_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+            config=GetSessionConfig(num_recent_events=0),
+        )
+        if session is not None:
+            self._recent_session_cache[cache_key] = (
+                time.monotonic(),
+                session.model_copy(deep=True),
+            )
+        return session
+
+    async def create_session(self, *, app_name: str, user_id: str, state=None, session_id=None):
+        import time
+
+        session = await super().create_session(
+            app_name=app_name,
+            user_id=user_id,
+            state=state,
+            session_id=session_id,
+        )
+        if session is not None:
+            self._recent_session_cache[(user_id, session.id)] = (
+                time.monotonic(),
+                session.model_copy(deep=True),
+            )
+        return session
+
+    async def append_event(self, session, event):
+        self._recent_session_cache.pop((session.user_id, session.id), None)
+        return await super().append_event(session=session, event=event)
+
+
 _LOCAL_SESSION_SERVICE: InMemorySessionService | None = None
-_CLOUD_SESSION_SERVICE: VertexAiSessionService | None = None
+_CLOUD_SESSION_SERVICE: SharedVertexAiSessionService | None = None
 _LOCAL_MEMORY_SERVICE: SharedInMemoryMemoryService | None = None
 _CLOUD_MEMORY_SERVICE: SharedVertexAiMemoryBankService | None = None
 _BQ_PLUGIN_CACHE: dict[str, list] = {}
@@ -299,7 +356,7 @@ def build_session_service():
             _LOCAL_SESSION_SERVICE = InMemorySessionService()
         return _LOCAL_SESSION_SERVICE
     if _CLOUD_SESSION_SERVICE is None:
-        _CLOUD_SESSION_SERVICE = VertexAiSessionService(
+        _CLOUD_SESSION_SERVICE = SharedVertexAiSessionService(
             project=os.environ["GOOGLE_CLOUD_PROJECT"],
             location=_location(),
             agent_engine_id=os.environ["SESSION_AGENT_ENGINE_ID"],

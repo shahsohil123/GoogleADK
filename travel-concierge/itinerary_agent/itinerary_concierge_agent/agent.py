@@ -57,6 +57,7 @@ The JSON object captures:
 root_agent = Agent(
     model=MODEL,
     name="itinerary_agent",
+    include_contents="none",
     description="Create and return a structured multi-day JSON representation of the travel itinerary.",
     instruction=ITINERARY_AGENT_INSTR,
     output_schema=Itinerary,
@@ -65,7 +66,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from itinerary_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -75,5 +75,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

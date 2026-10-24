@@ -145,7 +145,7 @@ for _attempt in range(5):
         _set_env_var("AGENT_ENGINE_RESOURCE_NAME", engine.api_resource.name)
         break
     except Exception as _exc:
-        if ("429" in str(_exc) or "RESOURCE_EXHAUSTED" in str(_exc)) and _attempt < 4:
+        if any(k in str(_exc) for k in ("429", "RESOURCE_EXHAUSTED", "FAILED_PRECONDITION", "UPDATING")) and _attempt < 4:
             _wait = 22.0 + (_attempt * 15.0) + random.uniform(1.0, 8.0)
             print(f"Hit Reasoning Engine write quota (429), retrying in {_wait:.1f}s ...", flush=True)
             _time.sleep(_wait)

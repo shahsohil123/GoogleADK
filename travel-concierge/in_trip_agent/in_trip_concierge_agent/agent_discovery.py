@@ -271,6 +271,17 @@ class HybridAgentRegistry(AgentRegistry):
             if tail in _resolved_name_cache:
                 path = _resolved_name_cache[tail]
 
+        if path.endswith("agents:search") and isinstance(json_data, dict) and "searchString" in json_data:
+            import re
+
+            raw_q = str(json_data.get("searchString") or "").replace("-", "_")
+            clean_tokens = [
+                tok
+                for tok in re.sub(r"[^a-zA-Z0-9_]+", " ", raw_q).split()
+                if tok.upper() not in ("AND", "OR", "NOT")
+            ]
+            json_data = {**json_data, "searchString": " ".join(clean_tokens)}
+
         data = super()._make_request(path, method=method, params=params, json_data=json_data)
         if isinstance(data, dict):
             eng_loc = os.environ.get("VERTEX_ENGINE_LOCATION", "us-central1")
@@ -410,6 +421,7 @@ _registry = HybridAgentRegistry(
 _httpx_client = build_authed_httpx_client()
 _agent_tool_cache: dict[str, _DirectRemoteA2aInvoker] = {}
 _resolved_name_cache: dict[str, str] = {}
+_cached_agents_list: list[dict] = []
 
 
 def _fresh_agent_tool(agent_name: str) -> _DirectRemoteA2aInvoker:
@@ -421,8 +433,11 @@ def prewarm_agent_discovery() -> None:
     """Eagerly populates `_resolved_name_cache` and `_agent_tool_cache` at module
     load so the first turn incurs zero lazy-loading overhead.
     """
+    global _cached_agents_list
     try:
         all_agents = _registry.list_agents().get("agents", [])
+        if all_agents:
+            _cached_agents_list = list(all_agents)
         for agent in all_agents:
             display_name = agent.get("displayName", "")
             resource_name = agent.get("name", "")
@@ -459,14 +474,64 @@ def _is_callable_a2a_agent(agent: dict, own_name: str | None) -> bool:
     return any(p.get("type") == "A2A_AGENT" for p in agent.get("protocols", []))
 
 
+def _score_agent_match(agent: dict, capability: str) -> int:
+    import re
+
+    dname = agent.get("displayName", "")
+    norm_dname = dname.lower().replace("-", "_").removesuffix("_a2a")
+    norm_cap = re.sub(r"[^a-z0-9]+", " ", capability.lower()).strip()
+    if not norm_cap:
+        return 1
+
+    score = 0
+    dname_phrase = norm_dname.replace("_", " ").removesuffix(" agent").strip()
+    if norm_cap == norm_dname or norm_cap == dname.lower():
+        score += 300
+    elif dname_phrase and dname_phrase in norm_cap:
+        score += 200
+
+    dname_words = [
+        w for w in re.sub(r"[^a-z0-9]+", " ", norm_dname).split()
+        if w not in ("agent", "a2a", "trip")
+    ]
+    catalog_tags = [
+        t.lower().replace("_", " ")
+        for t in _LOCAL_AGENT_CATALOG.get(norm_dname, {}).get("tags", [])
+    ]
+    haystack_words = set(
+        re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            " ".join(
+                [dname, agent.get("description", "")]
+                + [s.get("description", "") for s in agent.get("skills", [])]
+            ).lower(),
+        ).split()
+    )
+
+    words = [
+        w
+        for w in norm_cap.split()
+        if len(w) > 2 and w not in _SEARCH_STOPWORDS and w not in ("travel", "trip")
+    ]
+    for w in words:
+        if w in dname_words:
+            score += 35
+        if any(w == tag or w in tag.split() for tag in catalog_tags):
+            score += 20
+        if w in haystack_words:
+            score += 5
+    return score
+
+
 async def discover_agents(capability: str, tool_context: ToolContext) -> dict:
     """Find specialist A2A agents in Google Cloud Agent Registry that can help with a task.
 
     Searches Google Cloud Agent Registry via `_registry.search_agents(search_string=capability,
-    search_type="KEYWORD")` and falls back to keyword matching across `_registry.list_agents()`.
+    search_type="KEYWORD")` and ranks candidates across `_registry.list_agents()`.
 
     Args:
-        capability: A short description or name of the specialist capability you need.
+        capability: The specialist agent identifier (e.g. `day_of_agent`, `trip_monitor_agent`) or capability keywords.
     """
     own_name = tool_context._invocation_context.agent.name if tool_context._invocation_context else None
 
@@ -474,27 +539,27 @@ async def discover_agents(capability: str, tool_context: ToolContext) -> dict:
         span.set_attribute("adk.agent_registry.capability_query", capability)
         span.set_attribute("adk.agent_registry.caller_agent", own_name or "unknown")
 
-        result = _registry.search_agents(search_string=capability, search_type="KEYWORD")
-        matches = [
-            _to_match(agent) for agent in result.get("agents", []) if _is_callable_a2a_agent(agent, own_name)
-        ]
+        candidates_by_name: dict[str, dict] = {}
+        try:
+            result = _registry.search_agents(search_string=capability, search_type="KEYWORD")
+            for agent in result.get("agents", []):
+                if _is_callable_a2a_agent(agent, own_name) and agent.get("name"):
+                    candidates_by_name[agent["name"]] = agent
+        except Exception:
+            pass
 
-        if not matches:
-            words = [
-                w
-                for w in capability.lower().replace("_", " ").split()
-                if len(w) > 2 and w not in _SEARCH_STOPWORDS
-            ]
-            all_agents = _registry.list_agents().get("agents", [])
-            for agent in all_agents:
-                if not _is_callable_a2a_agent(agent, own_name):
-                    continue
-                haystack = " ".join(
-                    [agent.get("displayName", ""), agent.get("description", "")]
-                    + [s.get("description", "") for s in agent.get("skills", [])]
-            ).lower()
-                if any(word in haystack for word in words):
-                    matches.append(_to_match(agent))
+        all_agents = _cached_agents_list or _registry.list_agents().get("agents", [])
+        for agent in all_agents:
+            if _is_callable_a2a_agent(agent, own_name) and agent.get("name"):
+                candidates_by_name.setdefault(agent["name"], agent)
+
+        scored: list[tuple[int, dict]] = []
+        for agent in candidates_by_name.values():
+            sc = _score_agent_match(agent, capability)
+            if sc > 0:
+                scored.append((sc, _to_match(agent)))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        matches = [m for _, m in scored]
 
         span.set_attribute("adk.agent_registry.matches_count", len(matches))
         if not matches:

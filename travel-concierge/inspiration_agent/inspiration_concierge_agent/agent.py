@@ -69,6 +69,7 @@ Current time: {_time?}
 root_agent = Agent(
     model=MODEL,
     name="inspiration_agent",
+    include_contents="none",
     description="A travel inspiration agent who inspires users to discover their next vacations and provides information about places, activities, and points of interest.",
     instruction=INSPIRATION_AGENT_INSTR,
     tools=[call_agent_tool],
@@ -78,7 +79,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from inspiration_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -88,5 +88,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

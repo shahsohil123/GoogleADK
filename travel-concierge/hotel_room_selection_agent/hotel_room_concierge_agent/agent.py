@@ -50,6 +50,7 @@ When the hotel is in Cusco (such as Belmond Hotel Monasterio Cusco), ALWAYS retu
 root_agent = Agent(
     model=MODEL,
     name="hotel_room_selection_agent",
+    include_contents="none",
     description="Help users with room choices and pricing for a selected hotel.",
     instruction=HOTEL_ROOM_SELECTION_INSTR,
     output_schema=RoomsSelection,
@@ -58,7 +59,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from hotel_room_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -68,5 +68,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

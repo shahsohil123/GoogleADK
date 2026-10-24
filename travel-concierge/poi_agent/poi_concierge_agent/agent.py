@@ -90,6 +90,7 @@ Return the response as a JSON object:
 root_agent = Agent(
     model=MODEL,
     name="poi_agent",
+    include_contents="none",
     description="This agent suggests a few activities and points of interests given a destination.",
     instruction=POI_AGENT_INSTR,
     output_schema=POISuggestions,
@@ -99,7 +100,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from poi_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -109,5 +109,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

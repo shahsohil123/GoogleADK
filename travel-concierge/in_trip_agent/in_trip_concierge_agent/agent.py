@@ -59,6 +59,7 @@ Current time: "{itinerary_datetime?}" (system time: {_time?})
 root_agent = Agent(
     model=MODEL,
     name="in_trip_agent",
+    include_contents="none",
     description="Provide in-trip concierge assistance, daily flight/event/weather monitoring, and day-of transit logistics during the tour.",
     instruction=INTRIP_INSTR,
     tools=[call_agent_tool, memorize],
@@ -68,7 +69,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from in_trip_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -78,5 +78,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

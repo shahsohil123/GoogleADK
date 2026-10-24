@@ -67,6 +67,7 @@ Summarize the live status clearly and present a short list of suggested changes 
 root_agent = Agent(
     model=MODEL,
     name="trip_monitor_agent",
+    include_contents="none",
     description="Monitor aspects of an itinerary (flights, event bookings, weather impacts) and bring attention to items that necessitate changes.",
     instruction=TRIP_MONITOR_INSTR,
     tools=[flight_status_check, event_booking_check, weather_impact_check],
@@ -77,7 +78,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from trip_monitor_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -87,5 +87,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

@@ -72,6 +72,22 @@ Itinerary datetime override: {itinerary_datetime?}
 Itinerary start date: {itinerary_start_date?}
 Itinerary end date: {itinerary_end_date?}
 
+Current trip selections in session state:
+  <origin>{origin?}</origin>
+  <destination>{destination?}</destination>
+  <start_date>{start_date?}</start_date>
+  <end_date>{end_date?}</end_date>
+  <outbound_flight_selection>{outbound_flight_selection?}</outbound_flight_selection>
+  <outbound_seat_number>{outbound_seat_number?}</outbound_seat_number>
+  <return_flight_selection>{return_flight_selection?}</return_flight_selection>
+  <return_seat_number>{return_seat_number?}</return_seat_number>
+  <hotel_selection>{hotel_selection?}</hotel_selection>
+  <room_selection>{room_selection?}</room_selection>
+  <poi>{poi?}</poi>
+  <booking_status>{booking_status?}</booking_status>
+  <flight_confirmation>{flight_confirmation?}</flight_confirmation>
+  <hotel_confirmation>{hotel_confirmation?}</hotel_confirmation>
+
 Current itinerary:
   <itinerary>
   {itinerary?}
@@ -83,6 +99,7 @@ root_agent = Agent(
     name="root_agent",
     description="A Travel Concierge orchestrator using multiple independent A2A sub-agents discovered via Google Cloud Agent Registry.",
     instruction=ROOT_AGENT_INSTR,
+    include_contents="none",
     tools=[discover_agents_tool, call_agent_tool, memorize, recall_preferences_tool, save_preference_tool],
     generate_content_config=types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(thinking_level="LOW"),
@@ -90,7 +107,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from root_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -100,5 +116,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )

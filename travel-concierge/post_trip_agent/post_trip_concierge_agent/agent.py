@@ -44,6 +44,7 @@ When the user shares their post-trip feedback or preferences (such as seating pr
 root_agent = Agent(
     model=MODEL,
     name="post_trip_agent",
+    include_contents="none",
     description="A follow-up post-trip agent to learn from the user's travel experience and store preferences for future trips.",
     instruction=POSTTRIP_INSTR,
     tools=[memorize, recall_preferences_tool, save_preference_tool],
@@ -53,7 +54,6 @@ root_agent = Agent(
 )
 
 
-from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from post_trip_concierge_agent.vertex_services import build_bigquery_analytics_plugin, setup_cloud_trace_telemetry
 
@@ -63,5 +63,4 @@ app = App(
     name=root_agent.name,
     root_agent=root_agent,
     plugins=build_bigquery_analytics_plugin(root_agent.name, framework="google_adk"),
-    context_cache_config=ContextCacheConfig(),
 )
